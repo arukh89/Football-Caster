@@ -2,23 +2,24 @@
 
 import * as React from 'react';
 import StarterPackModal from '@/components/starter/StarterPackModal';
+import { quickAuth } from '@farcaster/miniapp-sdk';
 
 export function StarterExperience({ children }: { children: React.ReactNode }): JSX.Element {
   const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
-    // Show on first visit or after tutorial
-    const seen = typeof window !== 'undefined' ? localStorage.getItem('starterPackSeen') : '1';
-    const tutorialDone = typeof window !== 'undefined' ? localStorage.getItem('tutorialDone') : null;
-    const skip = typeof window !== 'undefined' ? localStorage.getItem('skipTutorial') : null;
-    // Allow forcing via URL
-    let force = false;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('forceStarter') === '1') force = true;
-    } catch {}
-    // Realtime only: show if not seen and tutorial flags/forced
-    if (!seen && (force || tutorialDone || skip)) setOpen(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await quickAuth.fetch('/api/starter/status', { cache: 'no-store' });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (!cancelled && data && data.hasClaimed === false) setOpen(true);
+      } catch {
+        // Silent: if auth not available, do not block UI
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   return (

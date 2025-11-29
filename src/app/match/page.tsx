@@ -11,13 +11,30 @@ import { MatchField } from '@/components/match/MatchField';
 import { MatchCommentary } from '@/components/match/MatchCommentary';
 import { TacticsPanel } from '@/components/match/TacticsPanel';
 import { MatchSimulator, type MatchState, type MatchTactics, type WeatherCondition } from '@/lib/match/engine';
+import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 
 export default function MatchPage(): JSX.Element {
+  const { identity } = useFarcasterIdentity();
+  const [myPlayers, setMyPlayers] = useState<any[] | null>(null);
   const [simulator, setSimulator] = useState<MatchSimulator | null>(null);
   const [matchState, setMatchState] = useState<MatchState | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(1);
   const [commentaryEnabled, setCommentaryEnabled] = useState<boolean>(true);
+
+  // Load owned players for gating
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!identity?.fid) return;
+        const res = await fetch(`/api/players/mine?fid=${identity.fid}`, { cache: 'no-store' });
+        const data = await res.json();
+        setMyPlayers(data.players || []);
+      } catch {
+        setMyPlayers([]);
+      }
+    })();
+  }, [identity?.fid]);
 
   // Initialize match
   useEffect(() => {
@@ -125,6 +142,27 @@ export default function MatchPage(): JSX.Element {
       default: return <Cloud className="h-5 w-5" />;
     }
   };
+
+  // Gate: require at least 11 players to play a match
+  if (myPlayers && myPlayers.length < 11) {
+    return (
+      <>
+        <DesktopNav />
+        <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8 flex items-center justify-center">
+          <GlassCard className="p-6 max-w-md text-center">
+            <Trophy className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+            <div className="font-bold text-lg mb-1">You need a squad to play</div>
+            <div className="text-sm text-muted-foreground mb-4">Claim the Starter Pack or acquire players from the market.</div>
+            <div className="flex gap-2 justify-center">
+              <a href="/transfer"><Button>Market</Button></a>
+              <a href="/"><Button variant="outline">Home</Button></a>
+            </div>
+          </GlassCard>
+        </div>
+        <Navigation />
+      </>
+    );
+  }
 
   if (!matchState) {
     return (
