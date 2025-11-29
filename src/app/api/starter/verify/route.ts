@@ -1,0 +1,94 @@
+/**
+ * POST /api/starter/verify
+ * Verify starter pack payment and grant pack
+ */
+
+import { type NextRequest, NextResponse } from 'next/server';
+import type { Address, Hash } from 'viem';
+import { stHasClaimedStarter, stGrantStarterPack } from '@/lib/spacetime/api';
+import { verifyFBCTransfer } from '@/lib/services/verification';
+import { validate, verifyStarterSchema } from '@/lib/middleware/validation';
+import { requireAuth, isDevFID } from '@/lib/middleware/auth';
+import { randomUUID } from 'crypto';
+
+export const runtime = 'nodejs';
+
+const TREASURY_ADDRESS = (process.env.NEXT_PUBLIC_TREASURY_ADDRESS as Address) || '0x0000000000000000000000000000000000000000';
+const STARTER_PRICE_USD = process.env.NEXT_PUBLIC_STARTER_PACK_PRICE_USD || '1';
+
+// Generate starter pack (15 random players)
+function generateStarterPack(): Array<{ itemId: string; itemType: string; rating: number }> {
+  const players: Array<{ itemId: string; itemType: string; rating: number }> = [];
+
+  for (let i = 0; i < 15; i++) {
+    players.push({
+      itemId: `player-${randomUUID()}`,
+      itemType: 'player',
+      rating: Math.floor(Math.random() * 30) + 60, // 60-90 rating
+    });
+  }
+
+  return players;
+}
+
+async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
+  try {
+    const body = await req.json();
+    const validation = validate(verifyStarterSchema, body);
+
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const { txHash } = validation.data;
+    const { fid, wallet } = ctx;
+    const already = await stHasClaimedStarter(fid);
+    if (already) return NextResponse.json({ error: 'Starter already claimed' }, { status: 409 });
+
+    // Dev FID bypass
+    if (isDevFID(fid)) {
+      const pack = generateStarterPack();
+      await stGrantStarterPack(fid, pack.map((p) => ({
+        playerId: p.itemId,
+        name: null,
+        position: null,
+        rating: p.rating,
+      })));
+      return NextResponse.json({ success: true, pack, devBypass: true });
+    }
+
+    // Verify payment
+    const verification = await verifyFBCTransfer(
+      txHash as Hash,
+      wallet as Address,
+      TREASURY_ADDRESS,
+      STARTER_PRICE_USD
+    );
+
+    if (!verification.valid) {
+      return NextResponse.json(
+        { error: verification.error || 'Payment verification failed' },
+        { status: 400 }
+      );
+    }
+
+    // Generate and grant pack via Spacetime
+    const pack = generateStarterPack();
+    await stGrantStarterPack(fid, pack.map((p) => ({
+      playerId: p.itemId,
+      name: null,
+      position: null,
+      rating: p.rating,
+    })));
+
+    return NextResponse.json({ success: true, pack });
+  } catch (error) {
+    console.error('Starter verify error:', error);
+    return NextResponse.json(
+      { error: 'Failed to verify payment' },
+      { status: 500 }
+    );
+  }
+}
+
+export const POST = requireAuth(handler);

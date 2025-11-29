@@ -1,0 +1,21 @@
+{
+  "version": "1",
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "miniapp": {
+    "name": "Football Caster",
+    "homeUrl": "https://footbal-casterv1.vercel.app",
+    "iconUrl": "https://footbal-casterv1.vercel.app/icon.jpg",
+    "splashImageUrl": "https://footbal-casterv1.vercel.app/preview.jpg",
+    "splashBackgroundColor": "#ffffff",
+    "screenshotUrls": [
+      "https://footbal-casterv1.vercel.app/preview.jpg",
+      "https://footbal-casterv1.vercel.app/thumbnail.jpg"
+    ],
+    "requiredChains": ["eip155:8453"],
+    "capabilities": { "wallet.getEthereumProvider": true }
+  }
+}

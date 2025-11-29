@@ -1,0 +1,13 @@
+# Node/Next
+node_modules/
+.next/
+.out/
+.turbo/
+coverage/
+pnpm-debug.log*
+tsconfig.tsbuildinfo
+.env*
+.DS_Store
+
+# Rust
+spacetime-server/rust/**/target/
