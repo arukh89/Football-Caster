@@ -1,8 +1,14 @@
 import { env } from 'process';
 
-const DEFAULT_URI = env.SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
+// Support multiple env var names; prefer public variants for client bundles
+const DEFAULT_URI = env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
 // Default to the latest published module identity if env not provided
-const DEFAULT_MODULE = env.SPACETIME_MODULE || 'c2003c6db639ffcecfbc698c9ff839e9da28eceff818f57c2f86d24e36b20263';
+const DEFAULT_MODULE =
+  env.SPACETIME_MODULE ||
+  env.SPACETIME_DB_NAME ||
+  env.NEXT_PUBLIC_SPACETIME_MODULE ||
+  env.NEXT_PUBLIC_SPACETIME_DB_NAME ||
+  'c2003c6db639ffcecfbc698c9ff839e9da28eceff818f57c2f86d24e36b20263';
 
 // Lazy import so client bundles don't include Node-only modules
 let _client: any | null = null;
@@ -26,8 +32,10 @@ export class SpacetimeClientBuilder {
     // Defer import to runtime; tolerate absence during build
     const st = await import('spacetimedb').catch(() => null as any);
     if (!st) throw new Error('spacetimedb package not installed');
+    // Normalize identity: accept both with and without 0x prefix
+    const moduleId = this._module?.startsWith('0x') ? this._module.slice(2) : this._module;
     // Future: pass token if supported by SDK
-    const conn = await st.connect(this._uri, this._module);
+    const conn = await st.connect(this._uri, moduleId);
     return conn;
   }
 }
