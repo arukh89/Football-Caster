@@ -3,6 +3,8 @@
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
+import { createClient as createQuickAuthClient } from '@farcaster/quick-auth';
+import { stGetUser } from '@/lib/spacetime/api';
 
 export interface AuthContext {
   fid: number;
@@ -20,6 +22,12 @@ function getToken(req: NextRequest): string | null {
   return null;
 }
 
+function getDomain(req: NextRequest): string {
+  const xfHost = req.headers.get('x-forwarded-host');
+  const host = (xfHost || req.headers.get('host') || '').trim();
+  return host.replace(/^https?:\/\//, '');
+}
+
 /**
  * Authenticate request and return user context
  */
@@ -33,10 +41,23 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
   }
 
   if (token) {
-    // Temporary: accept token as plain fid:wallet for dev
-    const [fidStr, wallet] = token.split(':');
-    const fidNum = parseInt(fidStr || '', 10);
-    if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
+    // First: try Quick Auth JWT verification
+    try {
+      const qa = createQuickAuthClient();
+      const payload = await qa.verifyJwt({ token, domain: getDomain(req) });
+      const fid = Number(payload.sub);
+      let wallet = '0xdev';
+      try {
+        const user = await stGetUser(fid);
+        if (user?.wallet) wallet = String(user.wallet).toLowerCase();
+      } catch {}
+      return { fid, wallet };
+    } catch {
+      // Fallback: accept token as plain fid:wallet in dev
+      const [fidStr, wallet] = token.split(':');
+      const fidNum = parseInt(fidStr || '', 10);
+      if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
+    }
   }
 
   // Dev fallback

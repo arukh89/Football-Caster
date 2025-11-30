@@ -60,7 +60,7 @@ export interface Listing {
   id: string;
   playerId: string;
   sellerFid: number;
-  priceFbc: string; // FBC in wei
+  priceWei: string; // FBC in wei
   createdAt: string;
   status: 'active' | 'sold' | 'cancelled';
 }

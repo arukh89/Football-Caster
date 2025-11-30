@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { quickAuth } from '@farcaster/miniapp-sdk';
 import type { FarcasterIdentity } from '@/lib/types';
 
 /**
@@ -21,9 +22,13 @@ export function useFarcasterIdentity(): {
 
     const fetchIdentity = async (): Promise<void> => {
       try {
-        // Waiting for Farcaster SDK integration; no shim/mock fallback
+        // Use Quick Auth to make an authenticated request to our backend
+        const res = await quickAuth.fetch('/api/auth/me');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
         if (mounted) {
-          setIdentity(null);
+          const ident: FarcasterIdentity = { fid: Number(data.fid) };
+          setIdentity(ident);
           setIsLoading(false);
         }
       } catch (err) {

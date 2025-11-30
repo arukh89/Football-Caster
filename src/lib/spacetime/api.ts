@@ -44,7 +44,7 @@ export async function stListActiveListings(): Promise<any[]> {
     id: l.id,
     playerId: l.item_id,
     sellerFid: l.seller_fid,
-    priceFbc: l.price_wei,
+    priceWei: l.price_wei,
     createdAt: iso(l.created_at_ms),
     status: 'active',
   }));
@@ -59,7 +59,7 @@ export async function stGetListing(id: string): Promise<any | null> {
     id: l.id,
     playerId: l.item_id,
     sellerFid: l.seller_fid,
-    priceFbc: l.price_wei,
+    priceWei: l.price_wei,
     createdAt: iso(l.created_at_ms),
     status: l.status === 'active' ? 'active' : 'sold',
   };
@@ -113,7 +113,7 @@ export async function stCreateListing(fid: number, itemId: string, priceWei: str
   const st = await getSpacetime();
   const rows = (await st.query(`SELECT * FROM listing WHERE seller_fid = ${fid} AND item_id = '${itemId}' ORDER BY created_at_ms DESC LIMIT 1`)) as any[];
   const l = rows?.[0];
-  return l ? { id: l.id, playerId: l.item_id, sellerFid: l.seller_fid, priceFbc: l.price_wei, createdAt: iso(l.created_at_ms), status: l.status } : null;
+  return l ? { id: l.id, playerId: l.item_id, sellerFid: l.seller_fid, priceWei: l.price_wei, createdAt: iso(l.created_at_ms), status: l.status } : null;
 }
 
 export async function stCreateAuction(

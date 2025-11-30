@@ -153,7 +153,7 @@ export default function MarketPage(): JSX.Element {
 
                       <div className="border-t border-border pt-3 mt-3">
                         <div className="grid grid-cols-1 gap-2">
-                          <PriceTag type="fixed" priceFbc={l.priceFbc} className="text-xs" />
+                          <PriceTag type="fixed" priceFbc={l.priceWei} className="text-xs" />
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 mt-3">
