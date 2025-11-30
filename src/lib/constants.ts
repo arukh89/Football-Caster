@@ -99,6 +99,8 @@ export const API_ENDPOINTS = {
   auction: {
     create: '/api/auctions',
     bid: '/api/auctions/bid',
+    buyNow: '/api/auctions/buy-now',
+    info: (id: string) => `/api/auctions/${id}/info`,
     finalize: '/api/auctions/finalize',
   },
   inbox: '/api/inbox',
