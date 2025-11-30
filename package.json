@@ -76,6 +76,7 @@
     "@types/react-dom": "19.2.3",
     "@typescript-eslint/parser": "^8.14.0",
     "autoprefixer": "^10.4.21",
+    "baseline-browser-mapping": "^2.8.32",
     "depcheck": "^1.4.7",
     "eslint": "^9.14.0",
     "eslint-config-next": "^16.0.5",
@@ -89,5 +90,6 @@
   },
   "engines": {
     "node": ">=22.11"
-  }
+  },
+  "packageManager": "pnpm@10.19.0"
 }
