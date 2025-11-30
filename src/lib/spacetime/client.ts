@@ -2,7 +2,8 @@ import { env } from 'process';
 
 // Canonical env vars only
 const DEFAULT_URI = env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
-const DEFAULT_DB_NAME = env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || 'c200f6a64262457c77a4f9c50c7f1cbec91f2497e60bee848ee8eda830cee187';
+// Use configured DB name; fallback to the correct production name
+const DEFAULT_DB_NAME = env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || 'footbalcasternewv2';
 
 // Lazy import so client bundles don't include Node-only modules
 let _client: any | null = null;
