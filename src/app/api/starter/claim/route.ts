@@ -37,7 +37,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Starter already claimed' }, { status: 400 });
     }
 
-    await stGrantStarterPack(fid, players);
+    // Transform to snake_case payload expected by reducers/lib.rs
+    const payload = players.map((p) => ({
+      player_id: p.playerId,
+      name: p.name ?? null,
+      position: p.position ?? null,
+      rating: p.rating,
+    }));
+
+    await stGrantStarterPack(fid, payload);
 
     return NextResponse.json({ players }, { status: 200 });
   } catch (error) {

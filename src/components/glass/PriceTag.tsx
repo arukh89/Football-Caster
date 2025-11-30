@@ -4,7 +4,7 @@ import { formatFBC } from '@/lib/wallet-utils';
 
 interface PriceTagProps {
   type: 'bid' | 'ask' | 'fixed' | 'auction';
-  priceFbc?: string;
+  priceFbcWei?: string;
   pointValue?: number;
   delta?: number;
   className?: string;
@@ -12,7 +12,7 @@ interface PriceTagProps {
 
 export function PriceTag({
   type,
-  priceFbc,
+  priceFbcWei,
   pointValue,
   delta,
   className,
@@ -43,9 +43,9 @@ export function PriceTag({
         )}
       </div>
       <div className="mt-1">
-        {priceFbc && (
+        {priceFbcWei && (
           <div className="text-lg font-bold">
-            {formatFBC(priceFbc)} FBC
+            {formatFBC(priceFbcWei)} FBC
           </div>
         )}
         {pointValue !== undefined && (

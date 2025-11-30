@@ -3,7 +3,7 @@
 import type React from 'react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Gavel, Plus, Clock } from 'lucide-react';
+import { Gavel, Plus, Clock, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GlassCard } from '@/components/glass/GlassCard';
@@ -13,10 +13,16 @@ import { Navigation, DesktopNav } from '@/components/Navigation';
 // Snapshots removed
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import type { Auction } from '@/lib/types';
+import { API_ENDPOINTS } from '@/lib/constants';
+import { useWallet } from '@/hooks/useWallet';
+import { payInFBC } from '@/lib/wallet-utils';
 
 export default function AuctionPage(): React.JSX.Element {
   const { identity } = useFarcasterIdentity();
   const [auctions, setAuctions] = useState<Auction[]>([]);
+  const { wallet, walletClient, publicClient, connect, isCorrectChain, switchToBase } = useWallet();
+  const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // Load auctions from realtime API
   useEffect(() => {
     const load = async (): Promise<void> => {
@@ -34,6 +40,56 @@ export default function AuctionPage(): React.JSX.Element {
   const activeAuctions = auctions?.filter((a) => a.status === 'active') || [];
   const myAuctions = activeAuctions.filter((a) => a.sellerFid === identity?.fid);
   const myBids = activeAuctions.filter((a) => a.currentBidderFid === identity?.fid);
+
+  async function refresh(): Promise<void> {
+    try {
+      const res = await fetch('/api/auctions', { cache: 'no-store' });
+      const data = await res.json();
+      setAuctions((data.auctions || []) as Auction[]);
+    } catch {}
+  }
+
+  const handleBuyNow = async (auction: Auction): Promise<void> => {
+    try {
+      setError(null);
+      setBuyingId(auction.id);
+      
+      if (!wallet.isConnected || !walletClient || !publicClient) {
+        connect();
+        throw new Error('Connect your wallet to continue');
+      }
+
+      if (!isCorrectChain) {
+        await switchToBase();
+      }
+
+      // Fetch payment target
+      const infoRes = await fetch(API_ENDPOINTS.auction.info(auction.id), { cache: 'no-store' });
+      const info = await infoRes.json();
+      if (!infoRes.ok) throw new Error(info.error || 'Failed to fetch buy-now info');
+
+      const sellerWallet = info.sellerWallet as `0x${string}`;
+      const amountWei = info.buyNowFbcWei as string;
+
+      // Pay in FBC
+      const { hash } = await payInFBC(walletClient, publicClient, sellerWallet, amountWei);
+
+      // Verify and execute buy-now
+      const bnRes = await fetch(API_ENDPOINTS.auction.buyNow, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auctionId: auction.id, txHash: hash }),
+      });
+      const bn = await bnRes.json();
+      if (!bnRes.ok) throw new Error(bn.error || 'Buy-now failed');
+
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Buy-now error');
+    } finally {
+      setBuyingId(null);
+    }
+  };
 
   const renderAuctionCard = (auction: Auction): React.JSX.Element => {
 
@@ -62,16 +118,21 @@ export default function AuctionPage(): React.JSX.Element {
               <div className="grid grid-cols-2 gap-2">
                 <PriceTag
                   type="auction"
-                  priceFbc={auction.currentBid}
-                  pointValue={auction.reserve}
+                  priceFbcWei={auction.topBidFbcWei || '0'}
                   className="text-xs"
                 />
-                {auction.buyNow && (
-                  <PriceTag
-                    type="fixed"
-                    priceFbc={auction.buyNow}
-                    className="text-xs"
-                  />
+                {auction.buyNowFbcWei && (
+                  <div className="space-y-2">
+                    <PriceTag type="fixed" priceFbcWei={auction.buyNowFbcWei} className="text-xs" />
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={(e) => { e.preventDefault(); void handleBuyNow(auction); }}
+                      disabled={buyingId === auction.id}
+                    >
+                      <Zap className="h-4 w-4 mr-1" /> {buyingId === auction.id ? 'Processing...' : 'Buy Now'}
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -205,6 +266,10 @@ export default function AuctionPage(): React.JSX.Element {
               )}
             </TabsContent>
           </Tabs>
+
+          {error && (
+            <div className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</div>
+          )}
         </div>
       </div>
       <Navigation />

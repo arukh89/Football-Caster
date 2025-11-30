@@ -1,32 +1,25 @@
 import { env } from 'process';
 
-const DEFAULT_URI = env.SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
-const DEFAULT_MODULE = env.SPACETIME_MODULE || 'football_caster';
+// Canonical env vars only
+const DEFAULT_URI = env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
+const DEFAULT_DB_NAME = env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || 'football-caster-new';
 
 // Lazy import so client bundles don't include Node-only modules
 let _client: any | null = null;
 
 export class SpacetimeClientBuilder {
   private _uri: string = DEFAULT_URI;
-  private _module: string = DEFAULT_MODULE;
+  private _dbName: string = DEFAULT_DB_NAME;
   private _token: string | null = null;
 
-  uri(v: string): this {
-    this._uri = v; return this;
-  }
-  module(v: string): this {
-    this._module = v; return this;
-  }
-  token(v: string): this {
-    this._token = v; return this;
-  }
+  uri(v: string): this { this._uri = v; return this; }
+  database(v: string): this { this._dbName = v; return this; }
+  token(v: string): this { this._token = v; return this; }
 
   async connect(): Promise<any> {
-    // Defer import to runtime; tolerate absence during build
     const st = await import('spacetimedb').catch(() => null as any);
     if (!st) throw new Error('spacetimedb package not installed');
-    // Future: pass token if supported by SDK
-    const conn = await st.connect(this._uri, this._module);
+    const conn = await st.connect(this._uri, this._dbName);
     return conn;
   }
 }
@@ -43,7 +36,7 @@ export async function getSpacetime() {
 }
 
 export function getEnv() {
-  return { URI: DEFAULT_URI, MODULE: DEFAULT_MODULE };
+  return { URI: DEFAULT_URI, DB_NAME: DEFAULT_DB_NAME };
 }
 
 // Placeholder typed helpers – replaced by generated bindings later

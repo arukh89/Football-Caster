@@ -1,43 +1,46 @@
 /**
- * POST /api/market/buy
- * Buy a marketplace listing
+ * POST /api/auctions/buy-now
+ * Buy-now flow with on-chain payment verification
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stGetListing, stGetUser, stCloseListingAndTransfer } from '@/lib/spacetime/api';
+import { stGetAuction, stGetUser, stBuyNow } from '@/lib/spacetime/api';
 import { verifyFBCTransferExact } from '@/lib/services/verification';
-import { validate, buyListingSchema } from '@/lib/middleware/validation';
+import { validate, buyNowAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
-// import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
   try {
     const body = await req.json();
-    const validation = validate(buyListingSchema, body);
+    const validation = validate(buyNowAuctionSchema, body);
 
     if (!validation.success) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { listingId, txHash } = validation.data;
+    const { auctionId, txHash } = validation.data;
     const { fid, wallet } = ctx;
 
-    // Get listing
-    const listing = await stGetListing(listingId);
-    if (!listing || listing.status !== 'active') {
-      return NextResponse.json({ error: 'Listing not found or closed' }, { status: 404 });
+    // Get auction
+    const auction = await stGetAuction(auctionId);
+    if (!auction || auction.status !== 'active') {
+      return NextResponse.json({ error: 'Auction not found or not active' }, { status: 404 });
     }
 
-    // Can't buy own listing
-    if (listing.sellerFid === fid) {
-      return NextResponse.json({ error: 'Cannot buy own listing' }, { status: 400 });
+    if (!auction.buyNowFbcWei) {
+      return NextResponse.json({ error: 'Buy-now not available' }, { status: 400 });
+    }
+
+    // Can't buy own auction
+    if (auction.sellerFid === fid) {
+      return NextResponse.json({ error: 'Cannot buy own auction' }, { status: 400 });
     }
 
     // Get seller wallet
-    const seller = await stGetUser(listing.sellerFid);
+    const seller = await stGetUser(auction.sellerFid);
     if (!seller) {
       return NextResponse.json({ error: 'Seller not found' }, { status: 404 });
     }
@@ -45,12 +48,12 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       return NextResponse.json({ error: 'Seller has no linked wallet' }, { status: 400 });
     }
 
-    // Verify FBC transfer
+    // Verify buy-now payment
     const verification = await verifyFBCTransferExact(
       txHash as Hash,
       wallet as Address,
       seller.wallet as Address,
-      listing.priceFbcWei
+      auction.buyNowFbcWei
     );
 
     if (!verification.valid) {
@@ -60,14 +63,14 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       );
     }
 
-    // Close listing and transfer via reducer (handles inbox + events)
-    await stCloseListingAndTransfer(listingId, fid);
+    // Perform buy-now via reducer (handles finalize + transfer)
+    await stBuyNow(auctionId, fid, auction.buyNowFbcWei);
 
-    return NextResponse.json({ success: true, itemId: listing.itemId });
+    return NextResponse.json({ success: true, status: 'buy_now', auctionId });
   } catch (error) {
-    console.error('Buy listing error:', error);
+    console.error('Buy-now error:', error);
     return NextResponse.json(
-      { error: 'Failed to process purchase' },
+      { error: 'Failed to process buy-now' },
       { status: 500 }
     );
   }

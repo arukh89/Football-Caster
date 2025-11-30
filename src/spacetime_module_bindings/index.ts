@@ -206,15 +206,15 @@ const tablesSchema = __schema(
 );
 
 const reducersSchema = __reducers(
-  __reducerSchema("BuyNow", BuyNow),
-  __reducerSchema("CloseListingAndTransfer", CloseListingAndTransfer),
-  __reducerSchema("CreateAuction", CreateAuction),
-  __reducerSchema("CreateListing", CreateListing),
-  __reducerSchema("FinalizeAuction", FinalizeAuction),
-  __reducerSchema("GrantStarterPack", GrantStarterPack),
-  __reducerSchema("InboxMarkRead", InboxMarkRead),
-  __reducerSchema("LinkWallet", LinkWallet),
-  __reducerSchema("PlaceBid", PlaceBid),
+  __reducerSchema("buy_now", BuyNow),
+  __reducerSchema("close_listing_and_transfer", CloseListingAndTransfer),
+  __reducerSchema("create_auction", CreateAuction),
+  __reducerSchema("create_listing", CreateListing),
+  __reducerSchema("finalize_auction", FinalizeAuction),
+  __reducerSchema("grant_starter_pack", GrantStarterPack),
+  __reducerSchema("inbox_mark_read", InboxMarkRead),
+  __reducerSchema("link_wallet", LinkWallet),
+  __reducerSchema("place_bid", PlaceBid),
 );
 
 const REMOTE_MODULE = {

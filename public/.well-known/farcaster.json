@@ -7,13 +7,13 @@
   },
   "miniapp": {
     "name": "Football Caster",
-    "homeUrl": "https://footbal-casterv1.vercel.app",
-    "iconUrl": "https://footbal-casterv1.vercel.app/icon.jpg",
-    "splashImageUrl": "https://footbal-casterv1.vercel.app/preview.jpg",
+    "homeUrl": "https://football-caster-new.vercel.app",
+    "iconUrl": "https://football-caster-new.vercel.app/icon.jpg",
+    "splashImageUrl": "https://football-caster-new.vercel.app/preview.jpg",
     "splashBackgroundColor": "#ffffff",
     "screenshotUrls": [
-      "https://footbal-casterv1.vercel.app/preview.jpg",
-      "https://footbal-casterv1.vercel.app/thumbnail.jpg"
+      "https://football-caster-new.vercel.app/preview.jpg",
+      "https://football-caster-new.vercel.app/thumbnail.jpg"
     ],
     "requiredChains": ["eip155:8453"],
     "capabilities": { "wallet.getEthereumProvider": true }

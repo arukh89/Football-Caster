@@ -16,11 +16,11 @@ export const runtime = 'nodejs';
 const TREASURY_ADDRESS = (process.env.NEXT_PUBLIC_TREASURY_ADDRESS as Address) || '0x0000000000000000000000000000000000000000';
 const STARTER_PRICE_USD = process.env.NEXT_PUBLIC_STARTER_PACK_PRICE_USD || '1';
 
-// Generate starter pack (15 random players)
+// Generate starter pack (18 random players)
 function generateStarterPack(): Array<{ itemId: string; itemType: string; rating: number }> {
   const players: Array<{ itemId: string; itemType: string; rating: number }> = [];
 
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 18; i++) {
     players.push({
       itemId: `player-${randomUUID()}`,
       itemType: 'player',
@@ -49,7 +49,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     if (isDevFID(fid)) {
       const pack = generateStarterPack();
       await stGrantStarterPack(fid, pack.map((p) => ({
-        playerId: p.itemId,
+        player_id: p.itemId,
         name: null,
         position: null,
         rating: p.rating,
@@ -75,7 +75,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     // Generate and grant pack via Spacetime
     const pack = generateStarterPack();
     await stGrantStarterPack(fid, pack.map((p) => ({
-      playerId: p.itemId,
+      player_id: p.itemId,
       name: null,
       position: null,
       rating: p.rating,

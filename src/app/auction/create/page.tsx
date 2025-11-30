@@ -31,7 +31,7 @@ export default function CreateAuctionPage(): JSX.Element {
   useEffect(() => {
     const load = async (): Promise<void> => {
       try {
-        const res = await fetch(`/api/players/mine?fid=${fid}`, { cache: 'no-store' });
+        const res = await fetch(`/api/players/mine`, { cache: 'no-store' });
         const data = await res.json();
         const mine = (data.players || []) as Player[];
       setMyPlayers(mine);
@@ -49,14 +49,14 @@ export default function CreateAuctionPage(): JSX.Element {
       setError(null);
 
       if (!selectedId) throw new Error('Select a player');
-      const reserveWei = parseFBC(reserve || '1');
-      const buyNowWei = buyNow ? parseFBC(buyNow) : undefined;
+      const reserveFbcWei = parseFBC(reserve || '1');
+      const buyNowFbcWei = buyNow ? parseFBC(buyNow) : undefined;
       const durationH = parseInt(duration || '48', 10);
 
       const res = await fetch('/api/auctions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId: selectedId, reserveWei, durationH, buyNowWei }),
+        body: JSON.stringify({ itemId: selectedId, reserveFbcWei, durationH, buyNowFbcWei }),
       });
 
       if (!res.ok) {

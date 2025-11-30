@@ -27,7 +27,7 @@ export default function MatchPage(): JSX.Element {
     (async () => {
       try {
         if (!identity?.fid) return;
-        const res = await fetch(`/api/players/mine?fid=${identity.fid}`, { cache: 'no-store' });
+        const res = await fetch(`/api/players/mine`, { cache: 'no-store' });
         const data = await res.json();
         setMyPlayers(data.players || []);
       } catch {

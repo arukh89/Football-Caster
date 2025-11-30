@@ -28,7 +28,7 @@ export const verifyStarterSchema = z.object({
 
 export const createListingSchema = z.object({
   itemId: z.string().min(1),
-  priceWei: z.string().regex(/^\d+$/),
+  priceFbcWei: z.string().regex(/^\d+$/),
   expiresAt: z.number().int().positive().optional(),
 });
 
@@ -41,17 +41,22 @@ export const buyListingSchema = z.object({
 
 export const createAuctionSchema = z.object({
   itemId: z.string().min(1),
-  reserveWei: z.string().regex(/^\d+$/),
+  reserveFbcWei: z.string().regex(/^\d+$/),
   durationH: z.number().int().min(1).max(168).default(48),
-  buyNowWei: z.string().regex(/^\d+$/).optional(),
+  buyNowFbcWei: z.string().regex(/^\d+$/).optional(),
 });
 
 export const placeBidSchema = z.object({
   auctionId: z.string().uuid(),
-  amountWei: z.string().regex(/^\d+$/),
+  amountFbcWei: z.string().regex(/^\d+$/),
 });
 
 export const finalizeAuctionSchema = z.object({
+  auctionId: z.string().uuid(),
+  txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+});
+
+export const buyNowAuctionSchema = z.object({
   auctionId: z.string().uuid(),
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
 });

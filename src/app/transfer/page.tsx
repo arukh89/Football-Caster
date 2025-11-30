@@ -41,10 +41,10 @@ export default function TransfersPage(): JSX.Element {
   }, [listings, identity, searchQuery]);
 
   const trending = useMemo(() => {
-    // Sort by priceWei (descending) as a simple proxy for trending
+    // Sort by priceFbcWei (descending) as a simple proxy for trending
     return [...filteredListings].sort((a, b) => {
-      const aWei = BigInt(a.priceWei || '0');
-      const bWei = BigInt(b.priceWei || '0');
+      const aWei = BigInt(a.priceFbcWei || '0');
+      const bWei = BigInt(b.priceFbcWei || '0');
       return bWei > aWei ? 1 : bWei < aWei ? -1 : 0;
     }).slice(0, 5);
   }, [filteredListings]);
@@ -114,9 +114,9 @@ export default function TransfersPage(): JSX.Element {
                   {[...filteredListings]
                     .sort((a, b) => {
                       if (sortBy === 'price-high' || sortBy === 'trending') {
-                        return BigInt(b.priceWei) > BigInt(a.priceWei) ? 1 : -1;
+                        return BigInt(b.priceFbcWei) > BigInt(a.priceFbcWei) ? 1 : -1;
                       } else if (sortBy === 'price-low') {
-                        return BigInt(a.priceWei) > BigInt(b.priceWei) ? 1 : -1;
+                        return BigInt(a.priceFbcWei) > BigInt(b.priceFbcWei) ? 1 : -1;
                       }
                       return 0;
                     })
@@ -128,7 +128,7 @@ export default function TransfersPage(): JSX.Element {
                             <div className="text-xs text-muted-foreground">Seller FID {l.sellerFid}</div>
                           </div>
                           <div className="border-t border-border pt-3 mt-3">
-                            <PriceTag type="fixed" priceFbc={l.priceWei} className="text-xs" />
+                            <PriceTag type="fixed" priceFbcWei={l.priceFbcWei} className="text-xs" />
                             <div className="grid grid-cols-2 gap-2 mt-3">
                               <Link href={`/market/${l.id}`}>
                                 <Button size="sm" className="w-full">View</Button>
@@ -163,7 +163,7 @@ export default function TransfersPage(): JSX.Element {
                           <div className="font-bold">Player {String(l.playerId).slice(0, 10)}</div>
                           <div className="text-xs text-muted-foreground">Seller FID {l.sellerFid}</div>
                         </div>
-                        <PriceTag type="fixed" priceFbc={l.priceWei} className="text-xs" />
+                        <PriceTag type="fixed" priceFbcWei={l.priceFbcWei} className="text-xs" />
                         <Link href={`/market/${l.id}`}>
                           <Button size="sm" className="championship-button">View</Button>
                         </Link>

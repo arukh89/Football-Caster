@@ -44,7 +44,7 @@ export async function stListActiveListings(): Promise<any[]> {
     id: l.id,
     playerId: l.item_id,
     sellerFid: l.seller_fid,
-    priceWei: l.price_wei,
+    priceFbcWei: l.price_wei,
     createdAt: iso(l.created_at_ms),
     status: 'active',
   }));
@@ -59,7 +59,7 @@ export async function stGetListing(id: string): Promise<any | null> {
     id: l.id,
     playerId: l.item_id,
     sellerFid: l.seller_fid,
-    priceWei: l.price_wei,
+    priceFbcWei: l.price_wei,
     createdAt: iso(l.created_at_ms),
     status: l.status === 'active' ? 'active' : 'sold',
   };
@@ -67,15 +67,14 @@ export async function stGetListing(id: string): Promise<any | null> {
 
 export async function stCloseListingAndTransfer(listingId: string, buyerFid: number): Promise<void> {
   const r = await reducers();
-  await r.CloseListingAndTransfer(listingId, buyerFid);
+  await r.close_listing_and_transfer(listingId, buyerFid);
 }
 
 export async function stListActiveAuctions(): Promise<any[]> {
   const st = await getSpacetime();
   const rows = (await st.query(`SELECT * FROM auction WHERE status = 'active' ORDER BY created_at_ms DESC`)) as any[];
   return (rows || []).map((a) => {
-    const currentBid = a.top_bid_wei ?? '0';
-    const incPct = Math.round((Number(currentBid) / 50)); // 2%
+    const currentBid = a.top_bid_wei ?? null;
     const incFloor = 1_000_000_000_000_000_000n;
     const minInc = (BigInt(currentBid || '0') / 50n);
     const minIncWei = (minInc < incFloor ? incFloor : minInc).toString();
@@ -83,12 +82,11 @@ export async function stListActiveAuctions(): Promise<any[]> {
       id: a.id,
       playerId: a.item_id,
       sellerFid: a.seller_fid,
-      currentBid,
+      topBidFbcWei: currentBid,
       currentBidderFid: a.top_bidder_fid ?? null,
-      reserveWei: a.reserve_wei,
+      reserveFbcWei: a.reserve_wei,
       endsAt: iso(a.ends_at_ms),
-      buyNow: a.buy_now_wei ?? null,
-      buyNowWei: a.buy_now_wei ?? null,
+      buyNowFbcWei: a.buy_now_wei ?? null,
       minIncrement: minIncWei,
       antiSnipeUsed: !!a.anti_snipe_used,
       status: 'active',
@@ -104,70 +102,69 @@ export async function stHasClaimedStarter(fid: number): Promise<boolean> {
 
 export async function stGrantStarterPack(fid: number, players: any[]): Promise<void> {
   const r = await reducers();
-  await r.GrantStarterPack(fid, JSON.stringify({ players }));
+  await r.grant_starter_pack(fid, JSON.stringify({ players }));
 }
 
-export async function stCreateListing(fid: number, itemId: string, priceWei: string): Promise<any> {
+export async function stCreateListing(fid: number, itemId: string, priceFbcWei: string): Promise<any> {
   const r = await reducers();
-  await r.CreateListing(fid, itemId, priceWei);
+  await r.create_listing(fid, itemId, priceFbcWei);
   const st = await getSpacetime();
   const rows = (await st.query(`SELECT * FROM listing WHERE seller_fid = ${fid} AND item_id = '${itemId}' ORDER BY created_at_ms DESC LIMIT 1`)) as any[];
   const l = rows?.[0];
-  return l ? { id: l.id, playerId: l.item_id, sellerFid: l.seller_fid, priceWei: l.price_wei, createdAt: iso(l.created_at_ms), status: l.status } : null;
+  return l ? { id: l.id, playerId: l.item_id, sellerFid: l.seller_fid, priceFbcWei: l.price_wei, createdAt: iso(l.created_at_ms), status: l.status } : null;
 }
 
 export async function stCreateAuction(
   fid: number,
   itemId: string,
-  reserveWei: string,
+  reserveFbcWei: string,
   durationSeconds: number,
-  buyNowWei?: string | null
+  buyNowFbcWei?: string | null
 ): Promise<any> {
   const r = await reducers();
-  await r.CreateAuction(fid, itemId, reserveWei, durationSeconds, buyNowWei ?? null);
+  await r.create_auction(fid, itemId, reserveFbcWei, durationSeconds, buyNowFbcWei ?? null);
   const st = await getSpacetime();
   const rows = (await st.query(`SELECT * FROM auction WHERE seller_fid = ${fid} AND item_id = '${itemId}' ORDER BY created_at_ms DESC LIMIT 1`)) as any[];
   const a = rows?.[0];
   if (!a) return null;
-  const currentBid = a.top_bid_wei ?? '0';
+  const currentBid = a.top_bid_wei ?? null;
   const minInc = (BigInt(currentBid || '0') / 50n);
   const minIncWei = (minInc < 1_000_000_000_000_000_000n ? 1_000_000_000_000_000_000n : minInc).toString();
   return {
     id: a.id,
     playerId: a.item_id,
     sellerFid: a.seller_fid,
-    currentBid,
+    topBidFbcWei: currentBid,
     currentBidderFid: a.top_bidder_fid ?? null,
-    reserveWei: a.reserve_wei,
+    reserveFbcWei: a.reserve_wei,
     endsAt: iso(a.ends_at_ms),
-    buyNow: a.buy_now_wei ?? null,
-    buyNowWei: a.buy_now_wei ?? null,
+    buyNowFbcWei: a.buy_now_wei ?? null,
     minIncrement: minIncWei,
     antiSnipeUsed: !!a.anti_snipe_used,
     status: 'active',
   };
 }
 
-export async function stPlaceBid(auctionId: string, fid: number, amountWei: string): Promise<string> {
+export async function stPlaceBid(auctionId: string, fid: number, amountFbcWei: string): Promise<string> {
   const st = await getSpacetime();
   const before = (await st.query(`SELECT ends_at_ms FROM auction WHERE id = '${auctionId}' LIMIT 1`)) as any[];
   const prevEnds = before?.[0]?.ends_at_ms as number | undefined;
   const r = await reducers();
-  await r.PlaceBid(fid, auctionId, amountWei);
+  await r.place_bid(fid, auctionId, amountFbcWei);
   const after = (await st.query(`SELECT ends_at_ms FROM auction WHERE id = '${auctionId}' LIMIT 1`)) as any[];
   const nextEnds = after?.[0]?.ends_at_ms as number | undefined;
   if (prevEnds && nextEnds && nextEnds > prevEnds) return 'anti_snipe_triggered';
   return 'bid_placed';
 }
 
-export async function stBuyNow(auctionId: string, buyerFid: number, buyNowWei: string): Promise<void> {
+export async function stBuyNow(auctionId: string, buyerFid: number, buyNowFbcWei: string): Promise<void> {
   const r = await reducers();
-  await r.BuyNow(auctionId, buyerFid, buyNowWei);
+  await r.buy_now(auctionId, buyerFid, buyNowFbcWei);
 }
 
 export async function stFinalizeAuction(auctionId: string, winnerFid: number): Promise<void> {
   const r = await reducers();
-  await r.FinalizeAuction(auctionId, winnerFid);
+  await r.finalize_auction(auctionId, winnerFid);
 }
 
 export async function stGetAuction(auctionId: string): Promise<any | null> {
@@ -175,7 +172,7 @@ export async function stGetAuction(auctionId: string): Promise<any | null> {
   const rows = (await st.query(`SELECT * FROM auction WHERE id = '${auctionId}' LIMIT 1`)) as any[];
   const a = rows?.[0];
   if (!a) return null;
-  const currentBid = a.top_bid_wei ?? '0';
+  const currentBid = a.top_bid_wei ?? null;
   const minInc = (BigInt(currentBid || '0') / 50n);
   const minIncWei = (minInc < 1_000_000_000_000_000_000n ? 1_000_000_000_000_000_000n : minInc).toString();
   const now = Date.now();
@@ -184,13 +181,11 @@ export async function stGetAuction(auctionId: string): Promise<any | null> {
     id: a.id,
     playerId: a.item_id,
     sellerFid: a.seller_fid,
-    currentBid,
+    topBidFbcWei: currentBid,
     currentBidderFid: a.top_bidder_fid ?? null,
-    topBidWei: a.top_bid_wei ?? null,
-    reserveWei: a.reserve_wei,
+    reserveFbcWei: a.reserve_wei,
     endsAt: iso(a.ends_at_ms),
-    buyNow: a.buy_now_wei ?? null,
-    buyNowWei: a.buy_now_wei ?? null,
+    buyNowFbcWei: a.buy_now_wei ?? null,
     minIncrement: minIncWei,
     antiSnipeUsed: !!a.anti_snipe_used,
     status,
@@ -199,7 +194,7 @@ export async function stGetAuction(auctionId: string): Promise<any | null> {
 
 export async function stLinkWallet(fid: number, address: string): Promise<void> {
   const r = await reducers();
-  await r.LinkWallet(fid, address);
+  await r.link_wallet(fid, address);
 }
 
 export async function stGetInbox(fid: number): Promise<any[]> {
@@ -218,7 +213,7 @@ export async function stGetInbox(fid: number): Promise<any[]> {
 
 export async function stInboxMarkRead(fid: number, ids: string[]): Promise<void> {
   const r = await reducers();
-  await r.InboxMarkRead(fid, JSON.stringify(ids));
+  await r.inbox_mark_read(fid, JSON.stringify(ids));
 }
 
 export async function stGetUser(fid: number): Promise<any | null> {

@@ -9,7 +9,6 @@ import { stGetAuction, stGetUser, stFinalizeAuction } from '@/lib/spacetime/api'
 import { verifyFBCTransferExact } from '@/lib/services/verification';
 import { validate, finalizeAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
-import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -31,9 +30,9 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 });
     }
 
-    // Must be closed
-    if (auction.status !== 'closed' && auction.status !== 'awaiting_payment') {
-      return NextResponse.json({ error: 'Auction not closed' }, { status: 400 });
+    // Must be awaiting payment (auction ended but not finalized)
+    if (auction.status !== 'awaiting_payment') {
+      return NextResponse.json({ error: 'Auction not awaiting payment' }, { status: 400 });
     }
 
     // Must be winner
@@ -41,7 +40,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       return NextResponse.json({ error: 'Only winner can finalize' }, { status: 403 });
     }
 
-    if (!auction.topBidWei) {
+    if (!auction.topBidFbcWei) {
       return NextResponse.json({ error: 'No winning bid' }, { status: 400 });
     }
 
@@ -50,13 +49,16 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     if (!seller) {
       return NextResponse.json({ error: 'Seller not found' }, { status: 404 });
     }
+    if (!seller.wallet) {
+      return NextResponse.json({ error: 'Seller has no linked wallet' }, { status: 400 });
+    }
 
     // Verify payment
     const verification = await verifyFBCTransferExact(
       txHash as Hash,
       wallet as Address,
       seller.wallet as Address,
-      auction.topBidWei
+      auction.topBidFbcWei
     );
 
     if (!verification.valid) {
