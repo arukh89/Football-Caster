@@ -45,6 +45,7 @@ export const metadata: Metadata = {
     "fc:miniapp": JSON.stringify({
       version: "1",
       imageUrl: "https://football-caster-new.vercel.app/preview.png",
+      ogImageUrl: "https://football-caster-new.vercel.app/preview.png",
       button: {
         title: "Open App",
         action: {
