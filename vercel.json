@@ -2,7 +2,19 @@
   "crons": [
     {
       "path": "/api/cron/farcaster-ingest",
-      "schedule": "0 0 * * 0"  
+      "schedule": "0 0 * * 0"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/analytics_events",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://warpcast.com" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Authorization, Content-Type, X-Requested-With" },
+        { "key": "Vary", "value": "Origin" },
+        { "key": "Access-Control-Max-Age", "value": "600" }
+      ]
     }
   ]
 }

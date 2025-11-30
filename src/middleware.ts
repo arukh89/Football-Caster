@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 const ALLOWED_ORIGINS = new Set([
   'https://warpcast.com',
   'https://www.warpcast.com',
+  'https://client.warpcast.com',
 ])
 
 function corsHeaders(origin: string | null): HeadersInit {
