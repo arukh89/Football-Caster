@@ -16,7 +16,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 });
     }
 
-    if (!auction.buyNowWei) {
+    if (!auction.buyNowFbcWei) {
       return NextResponse.json({ error: 'Buy-now not available' }, { status: 400 });
     }
 
@@ -27,11 +27,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       return NextResponse.json({ error: 'Seller has no linked wallet' }, { status: 400 });
     }
 
-    return NextResponse.json({
-      auctionId,
-      sellerWallet,
-      buyNowWei: auction.buyNowWei,
-    });
+    return NextResponse.json({ auctionId, sellerWallet, buyNowFbcWei: auction.buyNowFbcWei });
   } catch (error) {
     console.error('Auction info error:', error);
     return NextResponse.json({ error: 'Failed to fetch auction info' }, { status: 500 });

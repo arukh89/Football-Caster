@@ -9,7 +9,7 @@ import { stGetListing, stGetUser, stCloseListingAndTransfer } from '@/lib/spacet
 import { verifyFBCTransferExact } from '@/lib/services/verification';
 import { validate, buyListingSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
-import { randomUUID } from 'crypto';
+// import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -50,7 +50,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       txHash as Hash,
       wallet as Address,
       seller.wallet as Address,
-      listing.priceWei
+      listing.priceFbcWei
     );
 
     if (!verification.valid) {

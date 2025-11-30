@@ -69,7 +69,7 @@ export default function AuctionPage(): React.JSX.Element {
       if (!infoRes.ok) throw new Error(info.error || 'Failed to fetch buy-now info');
 
       const sellerWallet = info.sellerWallet as `0x${string}`;
-      const amountWei = info.buyNowWei as string;
+      const amountWei = info.buyNowFbcWei as string;
 
       // Pay in FBC
       const { hash } = await payInFBC(walletClient, publicClient, sellerWallet, amountWei);
@@ -118,13 +118,12 @@ export default function AuctionPage(): React.JSX.Element {
               <div className="grid grid-cols-2 gap-2">
                 <PriceTag
                   type="auction"
-                  priceFbc={auction.currentBid}
-                  pointValue={auction.reserve}
+                  priceFbcWei={auction.topBidFbcWei || '0'}
                   className="text-xs"
                 />
-                {auction.buyNow && (
+                {auction.buyNowFbcWei && (
                   <div className="space-y-2">
-                    <PriceTag type="fixed" priceFbc={auction.buyNow} className="text-xs" />
+                    <PriceTag type="fixed" priceFbcWei={auction.buyNowFbcWei} className="text-xs" />
                     <Button
                       size="sm"
                       className="w-full"

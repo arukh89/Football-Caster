@@ -46,11 +46,11 @@ export interface Auction {
   id: string;
   playerId: string;
   sellerFid: number;
-  currentBid: string; // FBC in wei
+  topBidFbcWei: string | null; // FBC in wei
   currentBidderFid: number | null;
-  reserve: number; // Point value
+  reserveFbcWei: string; // FBC in wei (reserve)
   endsAt: string; // ISO date string
-  buyNow: string | null; // FBC in wei
+  buyNowFbcWei: string | null; // FBC in wei
   minIncrement: string; // FBC in wei
   antiSnipeUsed: boolean;
   status: 'active' | 'ended' | 'finalized';
@@ -60,7 +60,7 @@ export interface Listing {
   id: string;
   playerId: string;
   sellerFid: number;
-  priceWei: string; // FBC in wei
+  priceFbcWei: string; // FBC in wei
   createdAt: string;
   status: 'active' | 'sold' | 'cancelled';
 }
@@ -71,7 +71,7 @@ export interface Offer {
   playerId: string;
   fromFid: number;
   toFid: number | null;
-  priceFbc: string;
+  priceFbcWei: string;
   expiry: string;
   status: 'pending' | 'accepted' | 'declined' | 'expired';
 }

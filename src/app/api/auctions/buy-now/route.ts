@@ -30,7 +30,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       return NextResponse.json({ error: 'Auction not found or not active' }, { status: 404 });
     }
 
-    if (!auction.buyNowWei) {
+    if (!auction.buyNowFbcWei) {
       return NextResponse.json({ error: 'Buy-now not available' }, { status: 400 });
     }
 
@@ -53,7 +53,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       txHash as Hash,
       wallet as Address,
       seller.wallet as Address,
-      auction.buyNowWei
+      auction.buyNowFbcWei
     );
 
     if (!verification.valid) {
@@ -64,7 +64,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     }
 
     // Perform buy-now via reducer (handles finalize + transfer)
-    await stBuyNow(auctionId, fid, auction.buyNowWei);
+    await stBuyNow(auctionId, fid, auction.buyNowFbcWei);
 
     return NextResponse.json({ success: true, status: 'buy_now', auctionId });
   } catch (error) {

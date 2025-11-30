@@ -9,7 +9,6 @@ import { stGetAuction, stGetUser, stFinalizeAuction } from '@/lib/spacetime/api'
 import { verifyFBCTransferExact } from '@/lib/services/verification';
 import { validate, finalizeAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
-import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -41,7 +40,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       return NextResponse.json({ error: 'Only winner can finalize' }, { status: 403 });
     }
 
-    if (!auction.topBidWei) {
+    if (!auction.topBidFbcWei) {
       return NextResponse.json({ error: 'No winning bid' }, { status: 400 });
     }
 
@@ -59,7 +58,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       txHash as Hash,
       wallet as Address,
       seller.wallet as Address,
-      auction.topBidWei
+      auction.topBidFbcWei
     );
 
     if (!verification.valid) {

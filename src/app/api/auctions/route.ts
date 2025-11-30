@@ -7,7 +7,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { stListActiveAuctions, stCreateAuction } from '@/lib/spacetime/api';
 import { validate, createAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth, isDevFID } from '@/lib/middleware/auth';
-import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -37,11 +36,11 @@ async function postHandler(req: NextRequest, ctx: { fid: number }): Promise<Resp
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { itemId, reserveWei, durationH, buyNowWei } = validation.data;
+    const { itemId, reserveFbcWei, durationH, buyNowFbcWei } = validation.data;
     const { fid } = ctx;
 
     const duration = durationH ?? 48;
-    const auction = await stCreateAuction(fid, itemId, reserveWei, duration * 60 * 60, buyNowWei ?? null);
+    const auction = await stCreateAuction(fid, itemId, reserveFbcWei, duration * 60 * 60, buyNowFbcWei ?? null);
 
     return NextResponse.json({
       success: true,

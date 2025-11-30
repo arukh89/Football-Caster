@@ -27,7 +27,7 @@ export default function LineupEditorPage(): JSX.Element {
   useEffect(() => {
     const load = async (): Promise<void> => {
       try {
-        const res = await fetch(`/api/players/mine?fid=${fid}`, { cache: 'no-store' });
+        const res = await fetch(`/api/players/mine`, { cache: 'no-store' });
         const data = await res.json();
         const mine = (data.players || []) as Player[];
       setPlayers(mine);

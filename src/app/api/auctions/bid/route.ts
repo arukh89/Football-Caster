@@ -7,7 +7,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { stGetAuction, stPlaceBid } from '@/lib/spacetime/api';
 import { validate, placeBidSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
-import { randomUUID } from 'crypto';
+// import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -20,7 +20,7 @@ async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { auctionId, amountWei } = validation.data;
+    const { auctionId, amountFbcWei } = validation.data;
     const { fid } = ctx;
 
     // Get auction
@@ -39,19 +39,19 @@ async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response
       return NextResponse.json({ error: 'Cannot bid on own auction' }, { status: 400 });
     }
 
-    const bidAmount = BigInt(amountWei);
+    const bidAmount = BigInt(amountFbcWei);
 
     // Check reserve met
-    if (bidAmount < BigInt(auction.reserveWei)) {
+    if (bidAmount < BigInt(auction.reserveFbcWei)) {
       return NextResponse.json(
-        { error: `Bid must meet reserve of ${auction.reserveWei}` },
+        { error: `Bid must meet reserve of ${auction.reserveFbcWei}` },
         { status: 400 }
       );
     }
 
     // Check minimum increment (+2% or 1 FBC)
-    if (auction.topBidWei) {
-      const currentBid = BigInt(auction.topBidWei);
+    if (auction.topBidFbcWei) {
+      const currentBid = BigInt(auction.topBidFbcWei);
       const minIncrement = currentBid / BigInt(50); // 2%
       const minIncrementFloor = BigInt(1e18); // 1 FBC
 
@@ -66,15 +66,15 @@ async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response
     }
 
     // Buy-now threshold reached -> require dedicated buy-now flow with on-chain verification
-    if (auction.buyNowWei && bidAmount >= BigInt(auction.buyNowWei)) {
+    if (auction.buyNowFbcWei && bidAmount >= BigInt(auction.buyNowFbcWei)) {
       return NextResponse.json(
-        { error: 'Bid meets buy-now price. Use /api/auctions/buy-now with txHash to complete.' , buyNowWei: auction.buyNowWei },
+        { error: 'Bid meets buy-now price. Use /api/auctions/buy-now with txHash to complete.' , buyNowFbcWei: auction.buyNowFbcWei },
         { status: 409 }
       );
     }
 
     // Place bid via reducer (handles increments + anti-snipe)
-    const status = await stPlaceBid(auctionId, fid, amountWei);
+    const status = await stPlaceBid(auctionId, fid, amountFbcWei);
     return NextResponse.json({ success: true, status });
   } catch (error) {
     console.error('Place bid error:', error);

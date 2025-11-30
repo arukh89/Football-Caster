@@ -36,10 +36,10 @@ async function postHandler(req: NextRequest, ctx: { fid: number; wallet: string 
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { itemId, priceWei } = validation.data;
+    const { itemId, priceFbcWei } = validation.data;
     const { fid } = ctx;
     // Server-side reducer enforces ownership and hold rules
-    const listing = await stCreateListing(fid, itemId, priceWei);
+    const listing = await stCreateListing(fid, itemId, priceFbcWei);
 
     return NextResponse.json({
       success: true,
