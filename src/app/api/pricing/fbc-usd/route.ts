@@ -7,6 +7,8 @@ import { NextResponse } from 'next/server';
 import { getFBCPrice } from '@/lib/services/pricing';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(): Promise<Response> {
   try {
@@ -18,7 +20,7 @@ export async function GET(): Promise<Response> {
         source: priceData.source,
         timestamp: priceData.timestamp,
       },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=120' } }
+      { headers: { 'Cache-Control': 'private, no-store, no-cache, must-revalidate' } }
     );
   } catch (error) {
     console.error('Price fetch error:', error);

@@ -9,6 +9,8 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { validate, markReadSchema } from '@/lib/middleware/validation';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function getHandler(req: NextRequest, ctx: { fid: number }): Promise<Response> {
   try {
@@ -20,7 +22,7 @@ async function getHandler(req: NextRequest, ctx: { fid: number }): Promise<Respo
 
     return NextResponse.json(
       { messages },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=120' } }
+      { headers: { 'Cache-Control': 'private, no-store, no-cache, must-revalidate' } }
     );
   } catch (error) {
     console.error('Get inbox error:', error);

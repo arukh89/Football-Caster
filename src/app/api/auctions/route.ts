@@ -9,6 +9,8 @@ import { validate, createAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth, isDevFID } from '@/lib/middleware/auth';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(): Promise<Response> {
   try {
@@ -16,7 +18,7 @@ export async function GET(): Promise<Response> {
 
     return NextResponse.json(
       { auctions },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=120' } }
+      { headers: { 'Cache-Control': 'private, no-store, no-cache, must-revalidate' } }
     );
   } catch (error) {
     console.error('Get auctions error:', error);
