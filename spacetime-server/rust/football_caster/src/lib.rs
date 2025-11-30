@@ -123,6 +123,19 @@ pub struct Inbox {
     pub read_at_ms: Option<i64>,
 }
 
+#[table(name = pvp_match, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PvpMatch {
+    #[primary_key]
+    pub id: String,
+    pub challenger_fid: i64,
+    pub challenged_fid: i64,
+    pub status: String, // pending, active, finalized
+    pub created_at_ms: i64,
+    pub accepted_at_ms: Option<i64>,
+    pub result_json: Option<String>,
+}
+
 #[table(name = idempotency, public)]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Idempotency {
@@ -178,7 +191,7 @@ pub fn grant_starter_pack(ctx: &ReducerContext, fid: i64, players_json: String) 
     if ctx.db().starter_claim().fid().find(&fid).is_some() { panic!("starter_already_claimed"); }
     let now = now_ms(ctx);
     ctx.db().starter_claim().insert(StarterClaim { fid, claimed_at_ms: now });
-    let evt = append_event(ctx, "StarterPackGranted", fid, players_json.clone(), None);
+    let evt = append_event(ctx, "starter_pack_granted", fid, players_json.clone(), None);
     let payload: StarterPackPayload = serde_json::from_str(&players_json).unwrap_or_default();
     let hold_until = now + HOLD_DAYS * 24 * 60 * 60 * 1000;
     for p in payload.players.iter() {
@@ -288,4 +301,41 @@ pub fn inbox_mark_read(ctx: &ReducerContext, fid: i64, msg_ids_json: String) {
         let inbox_tbl = ctx.db().inbox();
         if let Some(mut m) = inbox_tbl.msg_id().find(id) { if m.fid == fid { m.read_at_ms = Some(now_ms(ctx)); inbox_tbl.msg_id().update(m); } }
     }
+}
+
+#[reducer]
+pub fn pvp_create_challenge(ctx: &ReducerContext, challenger_fid: i64, challenged_fid: i64) {
+    if challenger_fid == challenged_fid { panic!("same_fid"); }
+    // Prevent duplicate active/pending matches between same pair
+    let sql = format!("SELECT id FROM pvp_match WHERE ((challenger_fid = {} AND challenged_fid = {}) OR (challenger_fid = {} AND challenged_fid = {})) AND status IN ('pending','active') LIMIT 1", challenger_fid, challenged_fid, challenged_fid, challenger_fid);
+    if let Ok(rows) = ctx.db().query(&sql) { if !rows.is_empty() { panic!("match_exists"); } }
+    let id = new_id(ctx, "pvp", &format!("{}:{}", challenger_fid, challenged_fid));
+    let m = PvpMatch { id: id.clone(), challenger_fid, challenged_fid, status: "pending".into(), created_at_ms: now_ms(ctx), accepted_at_ms: None, result_json: None };
+    ctx.db().pvp_match().insert(m);
+    append_event(ctx, "pvp_match_created", challenger_fid, "{}".into(), Some(id.clone()));
+    push_inbox(ctx, challenged_fid, format!("pvp-challenge-{}", id), "pvp_challenge", "New Challenge", &format!("FID {} challenged you.", challenger_fid));
+}
+
+#[reducer]
+pub fn pvp_accept(ctx: &ReducerContext, match_id: String, accepter_fid: i64) {
+    let tbl = ctx.db().pvp_match();
+    let mut m = tbl.id().find(&match_id).ok_or("match_not_found").unwrap();
+    if m.status != "pending" { panic!("invalid_state"); }
+    if m.challenged_fid != accepter_fid { panic!("not_challenged"); }
+    m.status = "active".into();
+    m.accepted_at_ms = Some(now_ms(ctx));
+    tbl.id().update(m.clone());
+    append_event(ctx, "pvp_match_accepted", accepter_fid, "{}".into(), Some(match_id));
+}
+
+#[reducer]
+pub fn pvp_submit_result(ctx: &ReducerContext, match_id: String, reporter_fid: i64, result_json: String) {
+    let tbl = ctx.db().pvp_match();
+    let mut m = tbl.id().find(&match_id).ok_or("match_not_found").unwrap();
+    if m.status != "active" { panic!("invalid_state"); }
+    if reporter_fid != m.challenger_fid && reporter_fid != m.challenged_fid { panic!("not_participant"); }
+    m.status = "finalized".into();
+    m.result_json = Some(result_json.clone());
+    tbl.id().update(m.clone());
+    append_event(ctx, "pvp_result_submitted", reporter_fid, result_json, Some(match_id));
 }

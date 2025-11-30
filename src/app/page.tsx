@@ -9,6 +9,7 @@ import { Navigation, DesktopNav } from '@/components/Navigation';
 import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
 import { UpcomingMatches } from '@/components/dashboard/UpcomingMatches';
 import { OnboardingFlow } from '@/components/tutorial/OnboardingFlow';
+import { StarterPackCard } from '@/components/starter/StarterPackCard';
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 // Realtime-only: snapshots removed
 import { DEV_FID } from '@/lib/constants';
@@ -143,12 +144,14 @@ export default function HomePage(): JSX.Element {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link href="/entry">
-                    <Button size="lg" className="gap-2 championship-button h-14 text-lg shadow-2xl shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all duration-300">
-                      🎮 Start Demo
-                      <ArrowRight className="h-5 w-5" />
-                    </Button>
-                  </Link>
+                  {isDev && (
+                    <Link href="/entry">
+                      <Button size="lg" className="gap-2 championship-button h-14 text-lg shadow-2xl shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all duration-300">
+                        🎮 Start Demo
+                        <ArrowRight className="h-5 w-5" />
+                      </Button>
+                    </Link>
+                  )}
                   <Link href="/match">
                     <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10">
                       ⚽ Watch Match
@@ -163,6 +166,9 @@ export default function HomePage(): JSX.Element {
               </div>
             )}
           </div>
+
+          {/* Starter Pack Card */}
+          <StarterPackCard />
 
           {/* Status Cards with Championship styling */}
           {userClub && (

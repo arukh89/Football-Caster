@@ -6,6 +6,7 @@ import './globals.css';
 import { Providers } from '@/providers/Providers';
 import FarcasterWrapper from "@/components/FarcasterWrapper";
 import { StarterExperience } from '@/providers/StarterExperience';
+import { PvpNotifier } from '@/components/pvp/PvpNotifier';
 
 export default function RootLayout({
   children,
@@ -23,6 +24,7 @@ export default function RootLayout({
                     <div className="stadium-pattern min-h-screen">
                       <FarcasterWrapper>
                         {children}
+                        <PvpNotifier />
                       </FarcasterWrapper>
                     </div>
                   </StarterExperience>

@@ -9,7 +9,7 @@ function iso(ms: number | null | undefined): string | null {
 export async function stGetPlayersMine(fid: number): Promise<Player[]> {
   const st = await getSpacetime();
   const inv = (await st.query(`SELECT * FROM inventory_item WHERE owner_fid = ${fid} AND item_type = 'player'`)) as any[];
-  const evs = (await st.query(`SELECT payload_json AS payloadJson FROM event WHERE actor_fid = ${fid} AND kind = 'StarterPackGranted'`)) as any[];
+  const evs = (await st.query(`SELECT payload_json AS payloadJson FROM event WHERE actor_fid = ${fid} AND kind IN ('StarterPackGranted','starter_pack_granted')`)) as any[];
   const meta = new Map<string, any>();
   for (const e of evs || []) {
     try {
@@ -220,4 +220,23 @@ export async function stGetUser(fid: number): Promise<any | null> {
   const st = await getSpacetime();
   const rows = (await st.query(`SELECT * FROM user WHERE fid = ${fid} LIMIT 1`)) as any[];
   return rows?.[0] ?? null;
+}
+
+// PvP reducers
+export async function stPvpChallenge(challengerFid: number, challengedFid: number): Promise<{ id: string }> {
+  const r = await reducers();
+  await r.pvp_create_challenge(challengerFid, challengedFid);
+  const st = await getSpacetime();
+  const rows = (await st.query(`SELECT id FROM pvp_match WHERE challenger_fid = ${challengerFid} AND challenged_fid = ${challengedFid} ORDER BY created_at_ms DESC LIMIT 1`)) as any[];
+  return { id: rows?.[0]?.id as string };
+}
+
+export async function stPvpAccept(matchId: string, accepterFid: number): Promise<void> {
+  const r = await reducers();
+  await r.pvp_accept(matchId, accepterFid);
+}
+
+export async function stPvpSubmitResult(matchId: string, reporterFid: number, result: any): Promise<void> {
+  const r = await reducers();
+  await r.pvp_submit_result(matchId, reporterFid, JSON.stringify(result));
 }
