@@ -41,16 +41,17 @@ export const metadata: Metadata = {
   description:
     "Football Caster: Join the marketplace, manage your squad, and participate in auctions using FBC tokens. Enjoy themed glass UI with secure wallet integration and weekly updates.",
   other: {
+    "fc:miniapp:manifest": "/.well-known/farcaster.json",
     "fc:miniapp": JSON.stringify({
       version: "1",
-      imageUrl: "https://football-caster-new.vercel.app/thumbnail.jpg",
+      imageUrl: "https://football-caster-new.vercel.app/preview.png",
       button: {
         title: "Open App",
         action: {
           type: "launch_frame",
           name: "Football Caster",
           url: "https://football-caster-new.vercel.app/",
-          splashImageUrl: "https://football-caster-new.vercel.app/preview.jpg",
+          splashImageUrl: "https://football-caster-new.vercel.app/splash.png",
           splashBackgroundColor: "#ffffff",
         },
       },

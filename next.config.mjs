@@ -21,6 +21,12 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: '/:image(preview|splash|icon).:ext(png|jpg|jpeg|webp|gif)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, immutable, no-transform, max-age=300' },
+        ],
+      },
     ];
   },
 };
