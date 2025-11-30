@@ -46,6 +46,12 @@ import LinkWallet from "./link_wallet_reducer";
 export { LinkWallet };
 import PlaceBid from "./place_bid_reducer";
 export { PlaceBid };
+import PvpAccept from "./pvp_accept_reducer";
+export { PvpAccept };
+import PvpCreateChallenge from "./pvp_create_challenge_reducer";
+export { PvpCreateChallenge };
+import PvpSubmitResult from "./pvp_submit_result_reducer";
+export { PvpSubmitResult };
 
 // Import and reexport all table handle types
 import AuctionRow from "./auction_table";
@@ -62,6 +68,8 @@ import InventoryItemRow from "./inventory_item_table";
 export { InventoryItemRow };
 import ListingRow from "./listing_table";
 export { ListingRow };
+import PvpMatchRow from "./pvp_match_table";
+export { PvpMatchRow };
 import StarterClaimRow from "./starter_claim_table";
 export { StarterClaimRow };
 import UserRow from "./user_table";
@@ -84,6 +92,8 @@ import InventoryItem from "./inventory_item_type";
 export { InventoryItem };
 import Listing from "./listing_type";
 export { Listing };
+import PvpMatch from "./pvp_match_type";
+export { PvpMatch };
 import StarterClaim from "./starter_claim_type";
 export { StarterClaim };
 import User from "./user_type";
@@ -171,6 +181,17 @@ const tablesSchema = __schema(
     ],
   }, ListingRow),
   __table({
+    name: 'pvp_match',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'pvp_match_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PvpMatchRow),
+  __table({
     name: 'starter_claim',
     indexes: [
       { name: 'fid', algorithm: 'btree', columns: [
@@ -215,6 +236,9 @@ const reducersSchema = __reducers(
   __reducerSchema("inbox_mark_read", InboxMarkRead),
   __reducerSchema("link_wallet", LinkWallet),
   __reducerSchema("place_bid", PlaceBid),
+  __reducerSchema("pvp_accept", PvpAccept),
+  __reducerSchema("pvp_create_challenge", PvpCreateChallenge),
+  __reducerSchema("pvp_submit_result", PvpSubmitResult),
 );
 
 const REMOTE_MODULE = {
