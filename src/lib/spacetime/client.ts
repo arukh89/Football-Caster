@@ -1,45 +1,53 @@
-// Normalize ENV: accept both URI/URL and DBNAME/DB_NAME/DATABASE variants
-const URI =
-  process.env.STDB_URI ||
-  process.env.STDB_URL ||
-  process.env.SPACETIME_URI ||
-  process.env.SPACETIME_URL ||
-  process.env.NEXT_PUBLIC_SPACETIME_URI ||
-  process.env.NEXT_PUBLIC_SPACETIME_URL ||
-  'wss://maincloud.spacetimedb.com';
-const DB =
-  process.env.STDB_DBNAME ||
-  process.env.STDB_DB_NAME ||
-  process.env.SPACETIME_DB_NAME ||
-  process.env.SPACETIME_DATABASE ||
-  process.env.NEXT_PUBLIC_SPACETIME_DB_NAME ||
-  process.env.NEXT_PUBLIC_SPACETIME_DATABASE ||
-  'footbalcasternewv2';
+import { env } from 'process';
 
-let _c: any | null = null;
+// Support both STDB_* and SPACETIME_* env names, prefer STDB_*
+const DEFAULT_URI = env.STDB_URI || env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
+// Use configured DB name; fallback to the correct production name
+const DEFAULT_DB_NAME = env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || 'footbalcasternewv2';
 
-export async function getSpacetime(): Promise<any> {
-  if (_c) return _c;
-  const bindings = await import('@/spacetime_module_bindings');
-  // Version-compatible: prefer builder.connect({ uri, database }) if available, else fall back to withUri/withModuleName/build
-  const builder: any = (bindings as any).DbConnection.builder();
-  if (typeof builder.connect === 'function') {
-    _c = await builder.connect({ uri: URI, database: DB });
-  } else {
-    _c = builder.withUri(URI).withModuleName(DB).build();
+// Lazy import so client bundles don't include Node-only modules
+let _client: any | null = null;
+
+export class SpacetimeClientBuilder {
+  private _uri: string = DEFAULT_URI;
+  private _dbName: string = DEFAULT_DB_NAME;
+  private _token: string | null = null;
+
+  uri(v: string): this { this._uri = v; return this; }
+  database(v: string): this { this._dbName = v; return this; }
+  token(v: string): this { this._token = v; return this; }
+
+  async connect(): Promise<any> {
+    const st = await import('spacetimedb').catch(() => null as any);
+    if (!st) throw new Error('spacetimedb package not installed');
+    const conn = await st.connect(this._uri, this._dbName);
+    return conn;
   }
-  return _c;
 }
 
+export function clientBuilder(): SpacetimeClientBuilder {
+  return new SpacetimeClientBuilder();
+}
+
+export async function getSpacetime() {
+  if (_client) return _client;
+  const conn = await clientBuilder().connect();
+  _client = conn;
+  return conn;
+}
+
+export function getEnv() {
+  return { URI: DEFAULT_URI, DB_NAME: DEFAULT_DB_NAME };
+}
+
+// Placeholder typed helpers – replaced by generated bindings later
 export async function reducers() {
   const st = await getSpacetime();
   return st.reducers as any;
 }
 
-export function getEnv() {
-  return { URI, DB_NAME: DB };
-}
-
 export type ReducerCall<TArgs extends any[] = any[], TRes = any> = (...args: TArgs) => Promise<TRes>;
 
-export const tables = {} as any;
+export const tables = {
+  // Populated by generated bindings; using any to avoid build errors pre-codegen
+} as any;
