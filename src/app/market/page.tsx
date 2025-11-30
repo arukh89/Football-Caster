@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, Filter, Search, TrendingUp, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { GlassCard } from '@/components/glass/GlassCard';
 import { PriceTag } from '@/components/glass/PriceTag';
 import { Navigation, DesktopNav } from '@/components/Navigation';
+import PullToRefresh from '@/components/PullToRefresh';
 // Snapshots removed
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 // types unused here
@@ -57,8 +58,9 @@ export default function MarketPage(): JSX.Element {
   return (
     <>
       <DesktopNav />
-      <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
-        <div className="container mx-auto px-4 py-6 max-w-6xl">
+      <PullToRefresh onRefresh={refresh}>
+        <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
+          <div className="container mx-auto px-4 py-6 max-w-6xl">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -98,7 +100,7 @@ export default function MarketPage(): JSX.Element {
                   <Input
                     placeholder="Search players..."
                     value={search}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
                     className="pl-10"
                   />
                 </div>
@@ -212,7 +214,8 @@ export default function MarketPage(): JSX.Element {
             )}
           </div>
         </div>
-      </div>
+        </div>
+      </PullToRefresh>
       <Navigation />
     </>
   );

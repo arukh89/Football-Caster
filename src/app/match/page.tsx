@@ -29,6 +29,19 @@ export default function MatchPage(): JSX.Element {
   const [speed, setSpeed] = useState<number>(1);
   const [commentaryEnabled, setCommentaryEnabled] = useState<boolean>(true);
 
+  // AI opponent helper
+  const buildAiOpponent = useCallback((ps: any[]): any[] => {
+    const pick11 = (arr: any[]) => (arr || []).slice().sort((a, b) => Number(b.rating) - Number(a.rating)).slice(0, 11)
+    return pick11(ps).map((p, i) => ({
+      playerId: `ai-${p.playerId}-${i}`,
+      name: p.name ? String(p.name).replace(/.*/, 'AI Player') : `AI Player ${i + 1}`,
+      position: p.position || 'MID',
+      rating: Math.max(55, Math.min(95, Number(p.rating || 70) + (i % 3) - 1)),
+      morale: 70,
+      attributes: p.attributes || { pace: 60, shooting: 60, passing: 60, dribbling: 60, defending: 60, physical: 60 },
+    }));
+  }, []);
+
   // Load owned players for gating
   useEffect(() => {
     (async () => {
@@ -77,6 +90,16 @@ export default function MatchPage(): JSX.Element {
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [identity?.fid, pollCurrent]);
+
+  // AI mode: synthesize opponent locally and mark match active
+  useEffect(() => {
+    if (mode !== 'ai') return;
+    if (!myPlayers || myPlayers.length < 11) return;
+    const ai = buildAiOpponent(myPlayers);
+    setOpponentPlayers(ai);
+    setCurrentMatchStatus('active');
+    setCurrentMatchId(null);
+  }, [mode, myPlayers, buildAiOpponent]);
 
   // Initialize simulator when both teams ready and match is active
   useEffect(() => {
@@ -224,8 +247,10 @@ export default function MatchPage(): JSX.Element {
     );
   }
 
-  // Gate: wait for real opponent
-  const hasOpponent = currentMatchStatus === 'active' && !!opponentPlayers && opponentPlayers.length >= 11;
+  // Gate: wait for opponent only in PvP
+  const hasOpponent = mode === 'ai'
+    ? !!myPlayers && myPlayers.length >= 11
+    : currentMatchStatus === 'active' && !!opponentPlayers && opponentPlayers.length >= 11;
   if (myPlayers && myPlayers.length >= 11 && !hasOpponent) {
     return (
       <>
