@@ -11,7 +11,7 @@ function corsHeaders(origin: string | null): HeadersInit {
   const h: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Requested-With',
-    'Vary': 'Origin',
+    Vary: 'Origin',
   }
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     h['Access-Control-Allow-Origin'] = origin
@@ -20,7 +20,7 @@ function corsHeaders(origin: string | null): HeadersInit {
   return h
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
   // Only apply to API routes
   if (!pathname.startsWith('/api')) return NextResponse.next()
