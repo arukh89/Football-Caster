@@ -38,14 +38,14 @@ export const metadata: Metadata = {
         description: "Football Caster: Join the marketplace, manage your squad, and participate in auctions using FBC tokens. Enjoy themed glass UI with secure wallet integration and weekly updates.",
         other: { "fc:frame": JSON.stringify({
           version: "next",
-          imageUrl: "https://footbal-casterv1.vercel.app/thumbnail.jpg",
+          imageUrl: "https://football-caster-new.vercel.app/thumbnail.jpg",
           button: {
             title: "Shoot this",
             action: {
               type: "launch_frame",
               name: "Football Caster Auction App",
-              url: "https://footbal-casterv1.vercel.app",
-              splashImageUrl: "https://footbal-casterv1.vercel.app/preview.jpg",
+              url: "https://football-caster-new.vercel.app/",
+              splashImageUrl: "https://football-caster-new.vercel.app/preview.jpg",
               splashBackgroundColor: "#ffffff"
             }
           }
