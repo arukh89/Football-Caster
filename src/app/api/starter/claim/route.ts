@@ -3,9 +3,11 @@ import type { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { stHasClaimedStarter, stGrantStarterPack } from '@/lib/spacetime/api';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const body = (await request.json()) as { fid?: number; amountWei?: string };
+    const body = (await request.json().catch(() => ({} as any))) as { fid?: number; amountWei?: string };
     const fid = body.fid ?? 250704; // dev default
 
     // Generate 18 players (11 + 7) with attributes
