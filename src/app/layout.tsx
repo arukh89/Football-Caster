@@ -15,7 +15,6 @@ export default function RootLayout({
   return (
             <html lang="en" className={inter.variable}>
               <head>
-                <meta name="fc:miniapp" content="true" />
                 <meta name="fc:miniapp:manifest" content="/.well-known/farcaster.json" />
               </head>
               <body className="min-h-screen bg-background font-sans antialiased championship-gradient">
@@ -34,21 +33,23 @@ export default function RootLayout({
 }
 
 export const metadata: Metadata = {
-        title: "Football Caster Auction App",
-        description: "Football Caster: Join the marketplace, manage your squad, and participate in auctions using FBC tokens. Enjoy themed glass UI with secure wallet integration and weekly updates.",
-        other: { "fc:frame": JSON.stringify({
-          version: "next",
-          imageUrl: "https://football-caster-new.vercel.app/thumbnail.jpg",
-          button: {
-            title: "Shoot this",
-            action: {
-              type: "launch_frame",
-              name: "Football Caster Auction App",
-              url: "https://football-caster-new.vercel.app/",
-              splashImageUrl: "https://football-caster-new.vercel.app/preview.jpg",
-              splashBackgroundColor: "#ffffff"
-            }
-          }
-        }
-        ) }
-    };
+  title: "Football Caster Auction App",
+  description:
+    "Football Caster: Join the marketplace, manage your squad, and participate in auctions using FBC tokens. Enjoy themed glass UI with secure wallet integration and weekly updates.",
+  other: {
+    "fc:miniapp": JSON.stringify({
+      version: "1",
+      imageUrl: "https://football-caster-new.vercel.app/thumbnail.jpg",
+      button: {
+        title: "Open App",
+        action: {
+          type: "launch_frame",
+          name: "Football Caster",
+          url: "https://football-caster-new.vercel.app/",
+          splashImageUrl: "https://football-caster-new.vercel.app/preview.jpg",
+          splashBackgroundColor: "#ffffff",
+        },
+      },
+    }),
+  },
+};
