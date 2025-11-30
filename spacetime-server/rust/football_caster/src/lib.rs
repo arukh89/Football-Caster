@@ -355,7 +355,7 @@ pub fn pvp_submit_result(ctx: &ReducerContext, match_id: String, reporter_fid: i
     let mut m = tbl.id().find(&match_id).ok_or("match_not_found").unwrap();
     if m.status != "active" { panic!("invalid_state"); }
     if reporter_fid != m.challenger_fid && reporter_fid != m.challenged_fid { panic!("not_participant"); }
-    if let Err(code) = validate_pvp_result_json(&result_json) { panic!(code); }
+    if let Err(code) = validate_pvp_result_json(&result_json) { panic!("{}", code); }
     m.status = "finalized".into();
     m.result_json = Some(result_json.clone());
     tbl.id().update(m.clone());

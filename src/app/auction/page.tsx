@@ -10,6 +10,7 @@ import { GlassCard } from '@/components/glass/GlassCard';
 import { PriceTag } from '@/components/glass/PriceTag';
 import { AuctionTimer } from '@/components/glass/AuctionTimer';
 import { Navigation, DesktopNav } from '@/components/Navigation';
+import PullToRefresh from '@/components/PullToRefresh';
 // Snapshots removed
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import type { Auction } from '@/lib/types';
@@ -168,40 +169,40 @@ export default function AuctionPage(): React.JSX.Element {
   return (
     <>
       <DesktopNav />
-      <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
-        <div className="container mx-auto px-4 py-6 max-w-6xl">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                <Gavel className="h-6 w-6 text-white" />
+      <PullToRefresh onRefresh={manualRefresh}>
+        <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
+          <div className="container mx-auto px-4 py-6 max-w-6xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                  <Gavel className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-bold">Auctions</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Bid on players or create auctions
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold">Auctions</h1>
-                <p className="text-sm text-muted-foreground">
-                  Bid on players or create auctions
-                </p>
-              </div>
-            </div>
-            <Link href="/auction/create">
-              <div className="flex items-center gap-2">
-                <div className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">Live</div>
-                {lastUpdated && (
-                  <span className="text-xs text-muted-foreground">Updated {Math.floor((Date.now() - lastUpdated)/1000)}s ago</span>
-                )}
-                <Button variant="outline" className="gap-2" onClick={() => void manualRefresh()} disabled={loading}>
-                  <RefreshCw className="h-4 w-4" /> Refresh
+              <Link href="/auction/create">
+                <div className="flex items-center gap-2">
+                  <div className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">Live</div>
+                  {lastUpdated && (
+                    <span className="text-xs text-muted-foreground">Updated {Math.floor((Date.now() - lastUpdated)/1000)}s ago</span>
+                  )}
+                  <Button variant="outline" className="gap-2" onClick={() => void manualRefresh()} disabled={loading}>
+                    <RefreshCw className="h-4 w-4" /> Refresh
+                  </Button>
+                </div>
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Auction
                 </Button>
-              </div>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Create Auction
-              </Button>
-            </Link>
-          </div>
+              </Link>
+            </div>
 
-          {/* Auction Info */}
-          <GlassCard className="mb-6 border-purple-500/20">
+            <GlassCard className="mb-6 border-purple-500/20">
             <div className="flex items-start gap-3">
               <div className="h-8 w-8 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0">
                 <Gavel className="h-4 w-4 text-purple-600" />
@@ -294,11 +295,12 @@ export default function AuctionPage(): React.JSX.Element {
             </TabsContent>
           </Tabs>
 
-          {error && (
-            <div className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</div>
-          )}
+            {error && (
+              <div className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</div>
+            )}
+          </div>
         </div>
-      </div>
+      </PullToRefresh>
       <Navigation />
     </>
   );
