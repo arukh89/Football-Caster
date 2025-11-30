@@ -8,13 +8,9 @@ import { stGetAuction, stGetUser } from '@/lib/spacetime/api';
 
 export const runtime = 'nodejs';
 
-interface Params {
-  params: { id: string };
-}
-
-export async function GET(_req: Request, { params }: Params): Promise<Response> {
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
-    const auctionId = params.id;
+    const { id: auctionId } = await ctx.params;
     const auction = await stGetAuction(auctionId);
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 });
