@@ -30,7 +30,11 @@ export default function AuctionPage(): React.JSX.Element {
         const res = await fetch('/api/auctions', { cache: 'no-store' });
         const data = await res.json();
         setAuctions((data.auctions || []) as Auction[]);
-      } catch {}
+        setError(null);
+      } catch (e) {
+        console.error('Failed to load auctions', e);
+        setError('Failed to load auctions');
+      }
     };
     void load();
   }, []);
@@ -46,7 +50,11 @@ export default function AuctionPage(): React.JSX.Element {
       const res = await fetch('/api/auctions', { cache: 'no-store' });
       const data = await res.json();
       setAuctions((data.auctions || []) as Auction[]);
-    } catch {}
+      setError(null);
+    } catch (e) {
+      console.error('Failed to refresh auctions', e);
+      setError('Failed to refresh auctions');
+    }
   }
 
   const handleBuyNow = async (auction: Auction): Promise<void> => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PlayCircle, Gift, ArrowRight, Zap, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,13 @@ import { motion } from 'framer-motion';
 export default function EntryPage(): JSX.Element {
   const router = useRouter();
   const [isStarting, setIsStarting] = useState<boolean>(false);
+
+  // Guard: disable demo route in non-development builds
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') {
+      router.replace('/');
+    }
+  }, [router]);
 
   const handleStartDemo = async (): Promise<void> => {
     setIsStarting(true);

@@ -22,6 +22,7 @@ export default function HomePage(): JSX.Element {
   const { addMiniApp } = useAddMiniApp();
   const isInFarcaster = useIsInFarcaster();
   useQuickAuth(isInFarcaster);
+  const isDevEnv = process.env.NODE_ENV === 'development';
   
   const [showTutorial, setShowTutorial] = useState<boolean>(false);
 
@@ -144,14 +145,6 @@ export default function HomePage(): JSX.Element {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {isDev && (
-                    <Link href="/entry">
-                      <Button size="lg" className="gap-2 championship-button h-14 text-lg shadow-2xl shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all duration-300">
-                        🎮 Start Demo
-                        <ArrowRight className="h-5 w-5" />
-                      </Button>
-                    </Link>
-                  )}
                   <Link href="/match">
                     <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10">
                       ⚽ Watch Match
@@ -304,11 +297,13 @@ export default function HomePage(): JSX.Element {
           </div>
         </div>
 
-        {/* Dashboard Section */}
-        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <PerformanceChart data={performanceData} />
-          <UpcomingMatches matches={upcomingMatches} />
-        </div>
+        {/* Dashboard Section (dev only) */}
+        {isDevEnv && (
+          <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <PerformanceChart data={performanceData} />
+            <UpcomingMatches matches={upcomingMatches} />
+          </div>
+        )}
       </div>
       <Navigation />
     </>

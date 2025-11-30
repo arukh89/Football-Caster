@@ -51,7 +51,9 @@ export default function SquadPage(): JSX.Element {
         setLineup(my.slice(0, 11));
         setSubs(my.slice(11));
       }
-      } catch {}
+      } catch (e) {
+        console.error('Failed to load players', e);
+      }
     };
     void load();
   }, [fid]);

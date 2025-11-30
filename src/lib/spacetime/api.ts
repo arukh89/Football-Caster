@@ -15,7 +15,9 @@ export async function stGetPlayersMine(fid: number): Promise<Player[]> {
     try {
       const payload = JSON.parse(e.payloadJson);
       for (const p of payload.players || []) meta.set(p.player_id, p);
-    } catch {}
+    } catch (e) {
+      console.error('Failed to parse starter pack payload', e);
+    }
   }
   return (inv || []).map((item: any) => {
     const m = meta.get(item.item_id) || {};

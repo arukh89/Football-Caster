@@ -45,7 +45,9 @@ export default function LineupEditorPage(): JSX.Element {
         setLineup(mine.slice(0, 11));
         setSubs(mine.slice(11));
       }
-      } catch {}
+      } catch (e) {
+        console.error('Failed to load players', e);
+      }
     };
     void load();
   }, [fid]);

@@ -50,7 +50,9 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
       try {
         const user = await stGetUser(fid);
         if (user?.wallet) wallet = String(user.wallet).toLowerCase();
-      } catch {}
+      } catch (e) {
+        console.error('stGetUser failed', e);
+      }
       return { fid, wallet };
     } catch {
       // Fallback: accept token as plain fid:wallet in dev

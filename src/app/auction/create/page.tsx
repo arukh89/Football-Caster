@@ -36,7 +36,9 @@ export default function CreateAuctionPage(): JSX.Element {
         const mine = (data.players || []) as Player[];
       setMyPlayers(mine);
       if (!selectedId && mine.length > 0) setSelectedId(mine[0].playerId);
-      } catch {}
+      } catch (e) {
+        console.error('Failed to load players', e);
+      }
     };
     void load();
   }, [fid]);

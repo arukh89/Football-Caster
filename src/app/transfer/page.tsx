@@ -16,6 +16,7 @@ import type { Listing } from '@/lib/types';
 export default function TransfersPage(): JSX.Element {
   const { identity } = useFarcasterIdentity();
   const [listings, setListings] = useState<Listing[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Load realtime listings
   useEffect(() => {
@@ -24,7 +25,11 @@ export default function TransfersPage(): JSX.Element {
         const res = await fetch('/api/market/listings', { cache: 'no-store' });
         const data = await res.json();
         setListings((data.listings || []) as Listing[]);
-      } catch {}
+        setLoadError(null);
+      } catch (e) {
+        console.error('Failed to load listings', e);
+        setLoadError('Failed to load listings');
+      }
     };
     void load();
   }, []);
@@ -103,7 +108,12 @@ export default function TransfersPage(): JSX.Element {
               </GlassCard>
 
               {/* Results: Listings */}
-              {filteredListings.length === 0 ? (
+              {loadError ? (
+                <GlassCard className="text-center py-12">
+                  <div className="text-lg font-semibold mb-1">{loadError}</div>
+                  <div className="text-sm text-muted-foreground">Please try again.</div>
+                </GlassCard>
+              ) : filteredListings.length === 0 ? (
                 <GlassCard className="text-center py-12">
                   <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                   <div className="text-lg font-semibold mb-1">No listings found</div>

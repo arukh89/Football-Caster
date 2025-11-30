@@ -18,7 +18,9 @@ export function PvpNotifier(): JSX.Element | null {
       const msgs: InboxMsg[] = data?.messages || [];
       const m = msgs.find((x) => x.type === 'pvp_challenge');
       if (m) setPending(m);
-    } catch {}
+    } catch (e) {
+      console.error('Failed to poll inbox', e);
+    }
   }, []);
 
   React.useEffect(() => {
