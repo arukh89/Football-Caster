@@ -18,8 +18,8 @@
     "ogDescription": "Build your Squad, train, play P2P and VS AI"
   },
   "accountAssociation": {
-    "header": "…",
-    "payload": "…",
-    "signature": "…"
+    "header": "eyJmaWQiOjI1MDcwNCwidHlwZSI6ImF1dGgiLCJrZXkiOiIweDA5RDAyRDI1RDBEMDgyZjdGMkUwNGI0ODM4Y0VmZTI3MWIyZGFCMDkifQ",
+    "payload": "eyJkb21haW4iOiJmb290YmFsbC1jYXN0ZXItbmV3LnZlcmNlbC5hcHAifQ",
+    "signature": "ff/prhxCIzG5/AqPGFMe9rB6uUW8rPJPHxAflxu4ZxFPHf3s7cCk9Mg3cOvblSAdH/4WOlpmK3/vKCUqu9Enqxs="
   }
 }
