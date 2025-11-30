@@ -160,7 +160,7 @@ fn append_event(ctx: &ReducerContext, ty: &str, actor_fid: i64, payload_json: St
 }
 
 #[reducer]
-pub fn LinkWallet(ctx: &ReducerContext, fid: i64, address: String) {
+pub fn link_wallet(ctx: &ReducerContext, fid: i64, address: String) {
     let now = now_ms(ctx);
     let users = ctx.db().user();
     match users.fid().find(&fid) {
@@ -174,7 +174,7 @@ pub fn LinkWallet(ctx: &ReducerContext, fid: i64, address: String) {
 }
 
 #[reducer]
-pub fn GrantStarterPack(ctx: &ReducerContext, fid: i64, players_json: String) {
+pub fn grant_starter_pack(ctx: &ReducerContext, fid: i64, players_json: String) {
     if ctx.db().starter_claim().fid().find(&fid).is_some() { panic!("starter_already_claimed"); }
     let now = now_ms(ctx);
     ctx.db().starter_claim().insert(StarterClaim { fid, claimed_at_ms: now });
@@ -190,7 +190,7 @@ pub fn GrantStarterPack(ctx: &ReducerContext, fid: i64, players_json: String) {
 }
 
 #[reducer]
-pub fn CreateListing(ctx: &ReducerContext, fid: i64, item_id: String, price_wei: String) {
+pub fn create_listing(ctx: &ReducerContext, fid: i64, item_id: String, price_wei: String) {
     let item = ctx.db().inventory_item().item_id().find(&item_id).ok_or("item_not_found").unwrap();
     if item.owner_fid != fid { panic!("not_owner"); }
     if now_ms(ctx) < item.hold_until_ms && fid != DEV_FID { panic!("in_hold"); }
@@ -200,7 +200,7 @@ pub fn CreateListing(ctx: &ReducerContext, fid: i64, item_id: String, price_wei:
 }
 
 #[reducer]
-pub fn CloseListingAndTransfer(ctx: &ReducerContext, listing_id: String, buyer_fid: i64) {
+pub fn close_listing_and_transfer(ctx: &ReducerContext, listing_id: String, buyer_fid: i64) {
     let listings = ctx.db().listing();
     let mut l = listings.id().find(&listing_id).ok_or("listing_not_found").unwrap();
     if l.status != "active" { panic!("listing_closed"); }
@@ -214,7 +214,7 @@ pub fn CloseListingAndTransfer(ctx: &ReducerContext, listing_id: String, buyer_f
 }
 
 #[reducer]
-pub fn CreateAuction(ctx: &ReducerContext, fid: i64, item_id: String, reserve_wei: String, duration_seconds: i64, buy_now_wei: Option<String>) {
+pub fn create_auction(ctx: &ReducerContext, fid: i64, item_id: String, reserve_wei: String, duration_seconds: i64, buy_now_wei: Option<String>) {
     let item = ctx.db().inventory_item().item_id().find(&item_id).ok_or("item_not_found").unwrap();
     if item.owner_fid != fid { panic!("not_owner"); }
     if now_ms(ctx) < item.hold_until_ms && fid != DEV_FID { panic!("in_hold"); }
@@ -225,7 +225,7 @@ pub fn CreateAuction(ctx: &ReducerContext, fid: i64, item_id: String, reserve_we
 }
 
 #[reducer]
-pub fn PlaceBid(ctx: &ReducerContext, fid: i64, auction_id: String, amount_wei: String) {
+pub fn place_bid(ctx: &ReducerContext, fid: i64, auction_id: String, amount_wei: String) {
     let auctions = ctx.db().auction();
     let mut a = auctions.id().find(&auction_id).ok_or("auction_not_found").unwrap();
     if a.status != "active" { panic!("auction_closed"); }
@@ -254,7 +254,7 @@ pub fn PlaceBid(ctx: &ReducerContext, fid: i64, auction_id: String, amount_wei: 
 }
 
 #[reducer]
-pub fn BuyNow(ctx: &ReducerContext, auction_id: String, buyer_fid: i64, buy_now_wei: String) {
+pub fn buy_now(ctx: &ReducerContext, auction_id: String, buyer_fid: i64, buy_now_wei: String) {
     let auctions = ctx.db().auction();
     let mut a = auctions.id().find(&auction_id).ok_or("auction_not_found").unwrap();
     if a.status != "active" { panic!("auction_closed"); }
@@ -269,7 +269,7 @@ pub fn BuyNow(ctx: &ReducerContext, auction_id: String, buyer_fid: i64, buy_now_
 }
 
 #[reducer]
-pub fn FinalizeAuction(ctx: &ReducerContext, auction_id: String, winner_fid: i64) {
+pub fn finalize_auction(ctx: &ReducerContext, auction_id: String, winner_fid: i64) {
     let auctions = ctx.db().auction();
     let mut a = auctions.id().find(&auction_id).ok_or("auction_not_found").unwrap();
     if a.status != "active" { panic!("auction_closed"); }
@@ -282,7 +282,7 @@ pub fn FinalizeAuction(ctx: &ReducerContext, auction_id: String, winner_fid: i64
 }
 
 #[reducer]
-pub fn InboxMarkRead(ctx: &ReducerContext, fid: i64, msg_ids_json: String) {
+pub fn inbox_mark_read(ctx: &ReducerContext, fid: i64, msg_ids_json: String) {
     let ids: Vec<String> = serde_json::from_str(&msg_ids_json).unwrap_or_default();
     for id in ids.iter() {
         let inbox_tbl = ctx.db().inbox();

@@ -67,7 +67,7 @@ export async function stGetListing(id: string): Promise<any | null> {
 
 export async function stCloseListingAndTransfer(listingId: string, buyerFid: number): Promise<void> {
   const r = await reducers();
-  await r.CloseListingAndTransfer(listingId, buyerFid);
+  await r.close_listing_and_transfer(listingId, buyerFid);
 }
 
 export async function stListActiveAuctions(): Promise<any[]> {
@@ -104,12 +104,12 @@ export async function stHasClaimedStarter(fid: number): Promise<boolean> {
 
 export async function stGrantStarterPack(fid: number, players: any[]): Promise<void> {
   const r = await reducers();
-  await r.GrantStarterPack(fid, JSON.stringify({ players }));
+  await r.grant_starter_pack(fid, JSON.stringify({ players }));
 }
 
 export async function stCreateListing(fid: number, itemId: string, priceWei: string): Promise<any> {
   const r = await reducers();
-  await r.CreateListing(fid, itemId, priceWei);
+  await r.create_listing(fid, itemId, priceWei);
   const st = await getSpacetime();
   const rows = (await st.query(`SELECT * FROM listing WHERE seller_fid = ${fid} AND item_id = '${itemId}' ORDER BY created_at_ms DESC LIMIT 1`)) as any[];
   const l = rows?.[0];
@@ -124,7 +124,7 @@ export async function stCreateAuction(
   buyNowWei?: string | null
 ): Promise<any> {
   const r = await reducers();
-  await r.CreateAuction(fid, itemId, reserveWei, durationSeconds, buyNowWei ?? null);
+  await r.create_auction(fid, itemId, reserveWei, durationSeconds, buyNowWei ?? null);
   const st = await getSpacetime();
   const rows = (await st.query(`SELECT * FROM auction WHERE seller_fid = ${fid} AND item_id = '${itemId}' ORDER BY created_at_ms DESC LIMIT 1`)) as any[];
   const a = rows?.[0];
@@ -153,7 +153,7 @@ export async function stPlaceBid(auctionId: string, fid: number, amountWei: stri
   const before = (await st.query(`SELECT ends_at_ms FROM auction WHERE id = '${auctionId}' LIMIT 1`)) as any[];
   const prevEnds = before?.[0]?.ends_at_ms as number | undefined;
   const r = await reducers();
-  await r.PlaceBid(fid, auctionId, amountWei);
+  await r.place_bid(fid, auctionId, amountWei);
   const after = (await st.query(`SELECT ends_at_ms FROM auction WHERE id = '${auctionId}' LIMIT 1`)) as any[];
   const nextEnds = after?.[0]?.ends_at_ms as number | undefined;
   if (prevEnds && nextEnds && nextEnds > prevEnds) return 'anti_snipe_triggered';
@@ -162,12 +162,12 @@ export async function stPlaceBid(auctionId: string, fid: number, amountWei: stri
 
 export async function stBuyNow(auctionId: string, buyerFid: number, buyNowWei: string): Promise<void> {
   const r = await reducers();
-  await r.BuyNow(auctionId, buyerFid, buyNowWei);
+  await r.buy_now(auctionId, buyerFid, buyNowWei);
 }
 
 export async function stFinalizeAuction(auctionId: string, winnerFid: number): Promise<void> {
   const r = await reducers();
-  await r.FinalizeAuction(auctionId, winnerFid);
+  await r.finalize_auction(auctionId, winnerFid);
 }
 
 export async function stGetAuction(auctionId: string): Promise<any | null> {
@@ -199,7 +199,7 @@ export async function stGetAuction(auctionId: string): Promise<any | null> {
 
 export async function stLinkWallet(fid: number, address: string): Promise<void> {
   const r = await reducers();
-  await r.LinkWallet(fid, address);
+  await r.link_wallet(fid, address);
 }
 
 export async function stGetInbox(fid: number): Promise<any[]> {
@@ -218,7 +218,7 @@ export async function stGetInbox(fid: number): Promise<any[]> {
 
 export async function stInboxMarkRead(fid: number, ids: string[]): Promise<void> {
   const r = await reducers();
-  await r.InboxMarkRead(fid, JSON.stringify(ids));
+  await r.inbox_mark_read(fid, JSON.stringify(ids));
 }
 
 export async function stGetUser(fid: number): Promise<any | null> {

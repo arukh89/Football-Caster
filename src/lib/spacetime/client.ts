@@ -1,7 +1,8 @@
 import { env } from 'process';
 
 const DEFAULT_URI = env.SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
-const DEFAULT_MODULE = env.SPACETIME_MODULE || 'football_caster';
+// Default to the latest published module identity if env not provided
+const DEFAULT_MODULE = env.SPACETIME_MODULE || 'c2003c6db639ffcecfbc698c9ff839e9da28eceff818f57c2f86d24e36b20263';
 
 // Lazy import so client bundles don't include Node-only modules
 let _client: any | null = null;
