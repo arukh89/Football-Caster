@@ -81,27 +81,41 @@ export const KIT_COLORS = [
 ] as const;
 
 export const API_ENDPOINTS = {
-  entry: {
-    pay: '/api/entry/pay',
-    claim: '/api/starter/claim',
-  },
-  club: {
-    settings: '/api/club/settings',
+  starter: {
+    quote: '/api/starter/quote',
+    verify: '/api/starter/verify',
+    status: '/api/starter/status',
   },
   market: {
-    list: '/api/market/listings',
-    buyNow: '/api/market/buy',
-  },
-  offer: {
-    create: '/api/offer/create',
-    accept: '/api/offer/accept',
+    listings: '/api/market/listings',
+    buy: '/api/market/buy',
   },
   auction: {
     create: '/api/auctions',
     bid: '/api/auctions/bid',
     buyNow: '/api/auctions/buy-now',
-    info: (id: string) => `/api/auctions/${id}/info`,
+    info: '/api/auctions/[id]/info',
     finalize: '/api/auctions/finalize',
   },
   inbox: '/api/inbox',
+  pvp: {
+    challenge: '/api/pvp/challenge',
+    accept: '/api/pvp/accept',
+    current: '/api/pvp/current',
+    submitResult: '/api/pvp/submit_result',
+  },
+  auth: {
+    me: '/api/auth/me',
+    link: '/api/auth/link',
+  },
+  players: {
+    mine: '/api/players/mine',
+  },
+  season: {
+    leaderboard: '/api/season/leaderboard',
+  },
+  pricing: {
+    fbcUsd: '/api/pricing/fbc-usd',
+    quote: '/api/pricing/quote',
+  },
 } as const;
