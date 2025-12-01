@@ -9,15 +9,42 @@ declare module "spacetimedb" {
   export function reducerSchema(...args: any[]): any
   export function convertToAccessorMap<T = any>(v: any): any
 
+  export const AlgebraicType: any
+  export type AlgebraicType = any
   export type AlgebraicTypeType = any
   export type Infer<T = any> = any
-  export type RemoteModule<T = any> = any
+  export type RemoteModule<TTables = any, TReducers = any> = any
   export type DbConnectionConfig<T = any> = any
+  export const BinaryReader: any
+  export const BinaryWriter: any
+  export class ClientCache<T = any> {
+    count(): number
+    iter(): Iterable<T>
+  }
+  export type ConnectionId = any
+  export const Identity: any
+  export class SubscriptionBuilderImpl<T = any> {
+    constructor(...args: any[])
+  }
+  export class DbConnectionImpl<T = any> {
+    constructor(...args: any[])
+    static builder?: (...args: any[]) => any
+  }
+  export class TableCache<T = any> {
+    count(): number
+    iter(): Iterable<T>
+  }
+  export const TimeDuration: any
+  export const Timestamp: any
+  export function deepEqual(a: any, b: any): boolean
+  export type AlgebraicTypeVariants = any
+  export type CallReducerFlags = any
   export type Event = any
   export type EventContextInterface<T = any> = any
   export type SubscriptionEventContextInterface<T = any> = any
   export type ReducerEventContextInterface<T = any> = any
   export type ErrorContextInterface<T = any> = any
+  export interface TableHandle<TableName extends string> {}
 
   // builder types referenced by codegen
   export class DbConnectionBuilder<DbConnection = any, ErrorContext = any, SubscriptionEventContext = any> {
@@ -28,12 +55,5 @@ declare module "spacetimedb" {
     build(): DbConnection
   }
 
-  // Implementation classes referenced by codegen (shims only)
-  export class SubscriptionBuilderImpl<T = any> {
-    constructor(...args: any[])
-  }
-  export class DbConnectionImpl<T = any> {
-    constructor(...args: any[])
-    static builder?: (...args: any[]) => any
-  }
+  // Note: runtime values come from the real spacetimedb package; this file only provides types
 }
