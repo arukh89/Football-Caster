@@ -21,6 +21,7 @@ export class SpacetimeClientBuilder {
     try {
       const bindings = await import('@/spacetime_module_bindings');
       if (bindings && (bindings as any).DbConnection?.builder) {
+        console.info('[STDB] Using generated bindings DbConnection.builder()');
         const conn = (bindings as any)
           .DbConnection
           .builder()
@@ -44,6 +45,7 @@ export class SpacetimeClientBuilder {
 
     const connect = (mod as any).connect ?? (mod as any).default?.connect;
     if (typeof connect === 'function') {
+      console.info('[STDB] Using spacetimedb.connect()');
       return await connect(this._uri, this._dbName);
     }
 
@@ -53,6 +55,7 @@ export class SpacetimeClientBuilder {
       : (mod as any).DbConnectionBuilder;
     if (Builder) {
       try {
+        console.info('[STDB] Using SDK DbConnectionBuilder fallback');
         const conn = (Builder as any)
           .builder?.()
           ?.withUri(this._uri)
