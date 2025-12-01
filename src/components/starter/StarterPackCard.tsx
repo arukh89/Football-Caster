@@ -49,7 +49,6 @@ export function StarterPackCard(): JSX.Element | null {
   };
 
   if (loading) return null;
-  if (hasClaimed) return null;
 
   return (
     <GlassCard className="mb-6 p-4 border-emerald-500/30">
@@ -65,8 +64,8 @@ export function StarterPackCard(): JSX.Element | null {
             One-time reward: get 18 tradable players to kickstart your squad.
           </p>
           {error && <div className="text-sm text-red-500 mb-2">{error}</div>}
-          <Button onClick={handleClaim} disabled={claiming} className="gap-2 championship-button">
-            {claiming ? "Processing..." : "Claim now"}
+          <Button onClick={handleClaim} disabled={claiming || !!hasClaimed} className="gap-2 championship-button">
+            {hasClaimed ? "Already claimed" : claiming ? "Processing..." : "Claim now"}
             <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
