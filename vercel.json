@@ -1,8 +1,4 @@
 {
-  "functions": {
-    "api/**/*.{js,ts}": { "runtime": "nodejs22.x" },
-    "app/**/route.{js,ts}": { "runtime": "nodejs22.x" }
-  },
   "crons": [
     {
       "path": "/api/cron/farcaster-ingest",
