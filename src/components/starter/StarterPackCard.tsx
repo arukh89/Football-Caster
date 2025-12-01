@@ -35,7 +35,8 @@ export function StarterPackCard(): JSX.Element | null {
     try {
       setClaiming(true);
       setError(null);
-      const res = await fetch("/api/starter/claim", { method: "POST" });
+      // Use Farcaster Miniapp SDK to include auth automatically
+      const res = await quickAuth.fetch("/api/starter/claim", { method: "POST" });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error || "Claim failed");
