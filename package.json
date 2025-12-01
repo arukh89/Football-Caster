@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "pnpm -s st:gen",
     "dev": "next dev",
     "build": "cross-env BROWSERSLIST_IGNORE_OLD_DATA=1 NODE_OPTIONS=--no-deprecation node scripts/build.mjs",
     "start": "next start",
