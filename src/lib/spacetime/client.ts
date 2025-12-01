@@ -1,4 +1,7 @@
 import { env } from 'process';
+// Prefer statically importing generated bindings so the bundler includes them in serverless output
+// This avoids relying on SDK-level `connect` which may be tree-shaken in some environments.
+import * as Gen from '@/spacetime_module_bindings';
 
 // Support both STDB_* and SPACETIME_* env names, prefer STDB_*
 const DEFAULT_URI = env.STDB_URI || env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
@@ -18,21 +21,16 @@ export class SpacetimeClientBuilder {
   token(v: string): this { this._token = v; return this; }
 
   async connect(): Promise<any> {
-    // 1) Prefer generated bindings (try alias then relative)
-    for (const spec of ['@/spacetime_module_bindings', '../../spacetime_module_bindings']) {
-      try {
-        const bindings = await import(spec as any);
-        if (bindings && (bindings as any).DbConnection?.builder) {
-          console.info('[STDB] Using generated bindings DbConnection.builder() from', spec);
-          const conn = (bindings as any)
-            .DbConnection
-            .builder()
-            .withUri(this._uri)
-            .withModuleName(this._dbName)
-            .build();
-          return conn;
-        }
-      } catch {}
+    // 1) Generated bindings (static import ensures inclusion in build)
+    if ((Gen as any)?.DbConnection?.builder) {
+      console.info('[STDB] Using generated bindings DbConnection.builder() (static import)');
+      const conn = (Gen as any)
+        .DbConnection
+        .builder()
+        .withUri(this._uri)
+        .withModuleName(this._dbName)
+        .build();
+      return conn;
     }
 
     // 2) Fallback: load spacetimedb package directly
