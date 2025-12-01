@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 
 export async function OPTIONS(req: NextRequest): Promise<Response> {
   const origin = req.headers.get('origin')
