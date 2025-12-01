@@ -19,7 +19,8 @@ export class SpacetimeClientBuilder {
   async connect(): Promise<any> {
     // 1) Prefer generated bindings (works across 1.8+)
     try {
-      const bindings = await import('@/spacetime_module_bindings');
+      // Use runtime-only dynamic import to avoid TS analyzing generated bindings
+      const bindings = await (Function('return import')())('@/spacetime_module_bindings');
       if (bindings && (bindings as any).DbConnection?.builder) {
         console.info('[STDB] Using generated bindings DbConnection.builder()');
         const conn = (bindings as any)
