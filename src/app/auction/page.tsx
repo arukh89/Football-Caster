@@ -73,7 +73,7 @@ export default function AuctionPage(): React.JSX.Element {
       }
 
       // Fetch payment target
-      const infoRes = await fetch(API_ENDPOINTS.auction.info(auction.id), { cache: 'no-store' });
+      const infoRes = await fetch(API_ENDPOINTS.auction.info.replace('[id]', auction.id), { cache: 'no-store' });
       const info = await infoRes.json();
       if (!infoRes.ok) throw new Error(info.error || 'Failed to fetch buy-now info');
 

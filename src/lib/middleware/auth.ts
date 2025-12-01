@@ -54,19 +54,29 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
         console.error('stGetUser failed', e);
       }
       return { fid, wallet };
-    } catch {
-      // Fallback: accept token as plain fid:wallet in dev
-      const [fidStr, wallet] = token.split(':');
-      const fidNum = parseInt(fidStr || '', 10);
-      if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
+    } catch (error) {
+      // In development, accept token as plain fid:wallet
+      if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_FALLBACK === 'true') {
+        const [fidStr, wallet] = token.split(':');
+        const fidNum = parseInt(fidStr || '', 10);
+        if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
+      }
+      // In production, JWT verification failure means unauthorized
+      console.error('JWT verification failed:', error);
+      return null;
     }
   }
 
-  // Dev fallback
-  const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
-  if (Number.isFinite(devFid)) {
-    return { fid: devFid, wallet: '0xdev' } as AuthContext;
+  // Dev fallback - only in development or with explicit flag
+  if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_FALLBACK === 'true') {
+    const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
+    if (Number.isFinite(devFid)) {
+      console.warn('Using dev fallback FID:', devFid);
+      return { fid: devFid, wallet: '0xdev' } as AuthContext;
+    }
   }
+
+  // In production, no token means unauthorized
   return null;
 }
 

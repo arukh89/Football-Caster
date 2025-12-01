@@ -12,7 +12,7 @@ const navItems = [
   { href: '/', icon: Home, label: 'Home' },
   { href: '/squad', icon: Users, label: 'Squad' },
   { href: '/match', icon: Play, label: 'Match' },
-  { href: '/transfers', icon: TrendingUp, label: 'Transfers' },
+  { href: '/transfer', icon: TrendingUp, label: 'Transfers' },
   { href: '/market', icon: ShoppingBag, label: 'Market' },
   { href: '/auction', icon: Gavel, label: 'Auctions' },
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
