@@ -3,9 +3,29 @@ import { env } from 'process';
 // This avoids relying on SDK-level `connect` which may be tree-shaken in some environments.
 import * as Gen from '@/spacetime_module_bindings';
 
+function sanitize(input: string | undefined, fallback: string): string {
+  let s = (input ?? fallback).trim();
+  // Strip surrounding quotes
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  // Convert http(s) -> ws(s) for SpacetimeDB if needed
+  if (s.startsWith('http://')) s = 'ws://' + s.slice('http://'.length);
+  if (s.startsWith('https://')) s = 'wss://' + s.slice('https://'.length);
+  // Remove stray CR/LF characters
+  s = s.replace(/[\r\n]+/g, '').trim();
+  return s;
+}
+
 // Support both STDB_* and SPACETIME_* env names, prefer STDB_*
-const DEFAULT_URI = env.STDB_URI || env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
-const DEFAULT_DB_NAME = env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || 'footbalcasternewv2';
+const DEFAULT_URI = sanitize(
+  env.STDB_URI || env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI,
+  'wss://maincloud.spacetimedb.com'
+);
+const DEFAULT_DB_NAME = sanitize(
+  env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME,
+  'footbalcasternewv2'
+);
 
 // Lazy import so client bundles don't include Node-only modules
 let _client: any | null = null;
