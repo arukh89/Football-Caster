@@ -17,9 +17,11 @@ export class SpacetimeClientBuilder {
   token(v: string): this { this._token = v; return this; }
 
   async connect(): Promise<any> {
-    const st = await import('spacetimedb').catch(() => null as any);
-    if (!st) throw new Error('spacetimedb package not installed');
-    const conn = await st.connect(this._uri, this._dbName);
+    const mod = await import('spacetimedb').catch(() => null as any);
+    if (!mod) throw new Error('spacetimedb package not installed');
+    const connect = (mod as any).connect ?? (mod as any).default?.connect;
+    if (typeof connect !== 'function') throw new Error('spacetimedb.connect not available');
+    const conn = await connect(this._uri, this._dbName);
     return conn;
   }
 }

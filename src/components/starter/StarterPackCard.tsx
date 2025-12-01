@@ -16,7 +16,7 @@ export function StarterPackCard(): JSX.Element | null {
     try {
       setLoading(true);
       setError(null);
-      const res = await quickAuth.fetch("/api/starter-pack/status", { cache: "no-store" });
+      const res = await quickAuth.fetch("/api/starter/status", { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as { hasClaimed: boolean };
       setHasClaimed(!!data.hasClaimed);

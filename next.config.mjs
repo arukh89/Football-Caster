@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Ensure Next.js does not bundle/transform server-only package
+  serverExternalPackages: ['spacetimedb'],
   async headers() {
     return [
       {
