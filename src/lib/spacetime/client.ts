@@ -69,21 +69,22 @@ export class SpacetimeClientBuilder {
       return await connect(this._uri, this._dbName);
     }
 
-    // 3) Last resort: if SDK exposes DbConnectionBuilder directly
-    const Builder = (mod as any).DbConnection?.builder
-      ? (mod as any).DbConnection
-      : (mod as any).DbConnectionBuilder;
-    if (Builder) {
-      try {
-        console.info('[STDB] Using SDK DbConnectionBuilder fallback');
-        const conn = (Builder as any)
-          .builder?.()
-          ?.withUri(this._uri)
-          ?.withModuleName(this._dbName)
-          ?.build?.();
+    // 3) Last resort: try known builder variants from SDK v1.9.x
+    try {
+      const builderFn =
+        (mod as any).DbConnection?.builder ||
+        (mod as any).DbConnectionBuilder?.builder ||
+        (mod as any).DbConnectionImpl?.builder;
+
+      if (typeof builderFn === 'function') {
+        console.info('[STDB] Using SDK builder() fallback');
+        const conn = builderFn()
+          .withUri(this._uri)
+          .withModuleName(this._dbName)
+          .build();
         if (conn) return conn;
-      } catch {}
-    }
+      }
+    } catch {}
 
     throw new Error('spacetimedb.connect not available');
   }
