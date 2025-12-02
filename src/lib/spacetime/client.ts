@@ -24,7 +24,7 @@ const DEFAULT_URI = sanitize(
 );
 const DEFAULT_DB_NAME = sanitize(
   env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME,
-  'footbalcasternewv2'
+  'footballcaster2'
 );
 
 // Lazy import so client bundles don't include Node-only modules

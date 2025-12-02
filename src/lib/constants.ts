@@ -12,6 +12,7 @@ export const CONTRACT_ADDRESSES = {
   fbc: (process.env.NEXT_PUBLIC_FBC_ADDRESS || '0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07') as `0x${string}`,
   treasury: (process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
   marketplace: (process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+  starterClaim: (process.env.NEXT_PUBLIC_STARTER_CLAIM_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
 } as const;
 
 export const ENTRY_FEE = {

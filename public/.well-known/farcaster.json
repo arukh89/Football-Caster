@@ -4,7 +4,6 @@
     "version": "1",
     "iconUrl": "https://football-caster-new.vercel.app/icon.png",
     "homeUrl": "https://football-caster-new.vercel.app",
-    "imageUrl": "https://football-caster-new.vercel.app/preview.png",
     "buttonTitle": "Open App",
     "splashImageUrl": "https://football-caster-new.vercel.app/splash.png",
     "splashBackgroundColor": "#ffffff",
@@ -12,7 +11,6 @@
     "description": "Build your dream team on Base. Trade players, compete, and dominate the leaderboard.",
     "primaryCategory": "games",
     "tags": ["game","social","community"],
-    "heroImageUrl": "https://football-caster-new.vercel.app/preview.png",
     "tagline": "Shoot your Balls",
     "ogDescription": "Build your Squad, train, play P2P and VS AI"
   },
