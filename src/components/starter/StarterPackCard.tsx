@@ -13,9 +13,9 @@ import { createWalletClient, http, createPublicClient } from "viem";
 import { base } from "viem/chains";
 
 interface QuoteResponse {
-  priceWei: string;
-  priceUSD: number;
-  expiresAt: number;
+  amountWei: string;
+  priceUsd: number | string;
+  expiresAt?: number;
 }
 
 export function StarterPackCard(): JSX.Element | null {
@@ -98,7 +98,7 @@ export function StarterPackCard(): JSX.Element | null {
         walletClient as any, 
         walletPublicClient as any, 
         CONTRACT_ADDRESSES.treasury, 
-        quote.priceWei
+        quote.amountWei
       );
       
       setStep('verifying');
@@ -152,10 +152,10 @@ export function StarterPackCard(): JSX.Element | null {
           
           {error && <div className="text-sm text-red-500 mb-2">{error}</div>}
           
-          {quote && step === 'payment' && (
+          {quote?.amountWei && step === 'payment' && (
             <div className="mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded">
-              <div className="text-sm">Price: {formatFBC(quote.priceWei)} FBC</div>
-              <div className="text-xs text-muted-foreground">(~${quote.priceUSD} USD)</div>
+              <div className="text-sm">Price: {formatFBC(quote.amountWei)}</div>
+              <div className="text-xs text-muted-foreground">(~${quote.priceUsd} USD)</div>
             </div>
           )}
 
@@ -182,7 +182,7 @@ export function StarterPackCard(): JSX.Element | null {
               {step === 'payment' && (
                 <Button 
                   onClick={handlePayAndVerify}
-                  disabled={processing || !quote}
+                  disabled={processing || !quote?.amountWei}
                   className="gap-2 championship-button"
                 >
                   {!wallet.isConnected ? "Connect Wallet" : "Pay & Claim"}
