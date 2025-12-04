@@ -7,13 +7,16 @@ declare module "spacetimedb" {
   export function schema(...args: any[]): any
   export function reducers(...args: any[]): any
   export function reducerSchema(...args: any[]): any
+  // added in SDK >=1.10 codegen
+  export function procedures(...args: any[]): any
+  export function procedureSchema(...args: any[]): any
   export function convertToAccessorMap<T = any>(v: any): any
 
   export const AlgebraicType: any
   export type AlgebraicType = any
   export type AlgebraicTypeType = any
   export type Infer<T = any> = any
-  export type RemoteModule<TTables = any, TReducers = any> = any
+  export type RemoteModule<TTables = any, TReducers = any, TProcedures = any> = any
   export type DbConnectionConfig<T = any> = any
   export const BinaryReader: any
   export const BinaryWriter: any
@@ -44,6 +47,7 @@ declare module "spacetimedb" {
   export type SubscriptionEventContextInterface<T = any> = any
   export type ReducerEventContextInterface<T = any> = any
   export type ErrorContextInterface<T = any> = any
+  export type SubscriptionHandleImpl<T = any> = any
   export interface TableHandle<TableName extends string> {}
 
   // builder types referenced by codegen
