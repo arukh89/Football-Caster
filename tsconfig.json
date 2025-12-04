@@ -19,6 +19,9 @@
     "paths": {
       "@/*": [
         "src/*"
+      ],
+      "spacetimedb": [
+        "src/shims/spacetimedb.ts"
       ]
     },
     "types": [
