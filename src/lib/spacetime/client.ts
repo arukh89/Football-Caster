@@ -38,11 +38,9 @@ export class SpacetimeClientBuilder {
   token(v: string): this { this._token = v; return this; }
 
   async connect(): Promise<any> {
-    // 1) Try generated bindings via dynamic import (optional)
+    // 1) Try generated bindings via direct import (works with Next.js path alias)
     try {
-      const MOD = ['@', '/', 'spacetime_module_bindings'].join('');
-      const dynamicImport = new Function('m', 'return import(m)') as (m: string) => Promise<any>;
-      const Gen: any = await dynamicImport(MOD);
+      const Gen: any = await import('@/spacetime_module_bindings');
       if (Gen?.DbConnection?.builder) {
         console.info('[STDB] Using generated bindings DbConnection.builder()');
         const conn = Gen.DbConnection
