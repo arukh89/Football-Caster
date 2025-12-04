@@ -3,12 +3,12 @@
  * Returns buy-now payment target for client wallet flow
  */
 
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { stGetAuction, stGetUser } from '@/lib/spacetime/api';
 
 export const runtime = 'nodejs';
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
     const { id: auctionId } = await ctx.params;
     const auction = await stGetAuction(auctionId);

@@ -6,7 +6,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { stListActiveAuctions, stCreateAuction } from '@/lib/spacetime/api';
 import { validate, createAuctionSchema } from '@/lib/middleware/validation';
-import { requireAuth, isDevFID } from '@/lib/middleware/auth';
+import { requireAuth } from '@/lib/middleware/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
