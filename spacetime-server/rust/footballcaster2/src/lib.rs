@@ -147,6 +147,16 @@
      pub ttl_until_ms: i64,
  }
  
+ #[table(name = transaction_used, public)]
+ #[derive(Clone, Serialize, Deserialize)]
+ pub struct TransactionUsed {
+     #[primary_key]
+     pub tx_hash: String,
+     pub used_at_ms: i64,
+     pub used_by_fid: i64,
+     pub endpoint: String,
+ }
+ 
  #[derive(Serialize, Deserialize, Clone, Default)]
  pub struct StarterPlayer { pub player_id: String, pub name: Option<String>, pub position: Option<String>, pub rating: Option<i32> }
  
@@ -360,4 +370,22 @@
      m.result_json = Some(result_json.clone());
      tbl.id().update(m.clone());
      append_event(ctx, "pvp_result_submitted", reporter_fid, result_json, Some(match_id));
+ }
+ 
+ #[reducer]
+ pub fn mark_tx_used(ctx: &ReducerContext, tx_hash: String, fid: i64, endpoint: String) {
+     let tx_table = ctx.db().transaction_used();
+     
+     // Check if transaction hash already used
+     if tx_table.tx_hash().find(&tx_hash).is_some() {
+         panic!("tx_already_used");
+     }
+     
+     // Mark transaction as used
+     tx_table.insert(TransactionUsed {
+         tx_hash,
+         used_at_ms: now_ms(ctx),
+         used_by_fid: fid,
+         endpoint,
+     });
  }

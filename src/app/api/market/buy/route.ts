@@ -5,11 +5,10 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stGetListing, stGetUser, stCloseListingAndTransfer } from '@/lib/spacetime/api';
+import { stGetListing, stGetUser, stCloseListingAndTransfer, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
 import { verifyFBCTransferExact } from '@/lib/services/verification';
 import { validate, buyListingSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
-// import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +23,12 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
 
     const { listingId, txHash } = validation.data;
     const { fid, wallet } = ctx;
+
+    // Check for transaction replay attack
+    const txUsed = await stIsTxUsed(txHash);
+    if (txUsed) {
+      return NextResponse.json({ error: 'Transaction hash already used' }, { status: 409 });
+    }
 
     // Get listing
     const listing = await stGetListing(listingId);
@@ -59,6 +64,9 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         { status: 400 }
       );
     }
+
+    // Mark transaction as used to prevent replay
+    await stMarkTxUsed(txHash, fid, '/api/market/buy');
 
     // Close listing and transfer via reducer (handles inbox + events)
     await stCloseListingAndTransfer(listingId, fid);

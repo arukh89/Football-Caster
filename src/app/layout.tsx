@@ -19,15 +19,17 @@ export default function RootLayout({
                 <meta name="fc:miniapp:manifest" content="/.well-known/farcaster.json" />
               </head>
               <body className="min-h-screen bg-background font-sans antialiased championship-gradient">
-                <Providers>
-                  <div className="stadium-pattern min-h-screen">
-                    <FarcasterWrapper>
-                      {children}
-                      <PvpNotifier />
-                      <Toaster richColors position="top-center" closeButton />
-                    </FarcasterWrapper>
-                  </div>
-                </Providers>
+                <ErrorBoundary>
+                  <Providers>
+                    <div className="stadium-pattern min-h-screen">
+                      <FarcasterWrapper>
+                        {children}
+                        <PvpNotifier />
+                        <Toaster richColors position="top-center" closeButton />
+                      </FarcasterWrapper>
+                    </div>
+                  </Providers>
+                </ErrorBoundary>
               </body>
             </html>
           );

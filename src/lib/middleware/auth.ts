@@ -67,6 +67,11 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
     }
   }
 
+  // SECURITY: Explicitly block dev fallback in production
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+  
   // Dev fallback - only in development or with explicit flag
   if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_FALLBACK === 'true') {
     const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);

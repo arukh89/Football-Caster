@@ -5,7 +5,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stGetAuction, stGetUser, stFinalizeAuction } from '@/lib/spacetime/api';
+import { stGetAuction, stGetUser, stFinalizeAuction, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
 import { verifyFBCTransferExact } from '@/lib/services/verification';
 import { validate, finalizeAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
@@ -23,6 +23,12 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
 
     const { auctionId, txHash } = validation.data;
     const { fid, wallet } = ctx;
+
+    // Check for transaction replay attack
+    const txUsed = await stIsTxUsed(txHash);
+    if (txUsed) {
+      return NextResponse.json({ error: 'Transaction hash already used' }, { status: 409 });
+    }
 
     // Get auction
     const auction = await stGetAuction(auctionId);
@@ -67,6 +73,9 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         { status: 400 }
       );
     }
+
+    // Mark transaction as used to prevent replay
+    await stMarkTxUsed(txHash, fid, '/api/auctions/finalize');
 
     // Finalize auction via reducer (handles event + transfer + inbox internally)
     await stFinalizeAuction(auctionId, fid);

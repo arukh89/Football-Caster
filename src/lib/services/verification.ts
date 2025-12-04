@@ -167,12 +167,13 @@ export async function verifyFBCTransferExact(
       return { valid: false, error: 'Transaction not found or failed' };
     }
 
-    // Wait for confirmations
+    // Wait for confirmations (10 blocks for security)
     const currentBlock = await publicClient.getBlockNumber();
     const confirmations = currentBlock - receipt.blockNumber;
+    const REQUIRED_CONFIRMATIONS = 10;
     
-    if (confirmations < 5) {
-      return { valid: false, error: `Insufficient confirmations: ${confirmations}/5` };
+    if (confirmations < REQUIRED_CONFIRMATIONS) {
+      return { valid: false, error: `Insufficient confirmations: ${confirmations}/${REQUIRED_CONFIRMATIONS}` };
     }
 
     const transferLog = receipt.logs.find((log) => {

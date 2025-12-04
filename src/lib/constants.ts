@@ -8,9 +8,31 @@ export const CHAIN_CONFIG = {
   rpcUrl: process.env.NEXT_PUBLIC_BASE_RPC_URL || process.env.BASE_RPC_URL || 'https://mainnet.base.org',
 } as const;
 
+// Validate critical addresses at import time
+function validateTreasuryAddress(): `0x${string}` {
+  const address = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
+  
+  if (!address || address === '0x0000000000000000000000000000000000000000') {
+    throw new Error(
+      'CRITICAL: NEXT_PUBLIC_TREASURY_ADDRESS must be configured and cannot be zero address. ' +
+      'All payments would be lost to burn address. Set this in .env file.'
+    );
+  }
+  
+  // Basic address format validation
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    throw new Error(
+      `CRITICAL: NEXT_PUBLIC_TREASURY_ADDRESS has invalid format: ${address}. ` +
+      'Must be a valid Ethereum address (0x followed by 40 hex characters).'
+    );
+  }
+  
+  return address as `0x${string}`;
+}
+
 export const CONTRACT_ADDRESSES = {
   fbc: (process.env.NEXT_PUBLIC_FBC_ADDRESS || '0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07') as `0x${string}`,
-  treasury: (process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+  treasury: validateTreasuryAddress(),
   marketplace: (process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
   starterClaim: (process.env.NEXT_PUBLIC_STARTER_CLAIM_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
 } as const;

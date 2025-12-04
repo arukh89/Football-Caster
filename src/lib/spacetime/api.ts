@@ -111,6 +111,19 @@ export async function stHasClaimedStarter(fid: number): Promise<boolean> {
   return !!(st.db.starterClaim.fid().find(BigInt(fid)) as any);
 }
 
+/**
+ * Check if user has entered before (has any data in system)
+ */
+export async function stHasEnteredBefore(fid: number): Promise<boolean> {
+  const st = await getSpacetime();
+  // User has entered if they have any inventory items or claimed starter pack
+  const hasInventory = (Array.from(st.db.inventoryItem.iter()) as any[]).some(
+    (item) => item.ownerFid === BigInt(fid)
+  );
+  const hasClaimed = !!(st.db.starterClaim.fid().find(BigInt(fid)) as any);
+  return hasInventory || hasClaimed;
+}
+
 export async function stGrantStarterPack(fid: number, players: any[]): Promise<void> {
   const r = await reducers();
   await r.grant_starter_pack(fid, JSON.stringify({ players }));
@@ -243,6 +256,23 @@ export async function stGetUser(fid: number): Promise<any | null> {
   const st = await getSpacetime();
   const u = st.db.user.fid().find(BigInt(fid)) as any;
   return u ? { ...u, fid: Number(u.fid) } : null;
+}
+
+/**
+ * Check if transaction hash has been used
+ */
+export async function stIsTxUsed(txHash: string): Promise<boolean> {
+  const st = await getSpacetime();
+  const tx = st.db.transactionUsed.txHash().find(txHash);
+  return !!tx;
+}
+
+/**
+ * Mark transaction as used (via reducer) - prevents replay attacks
+ */
+export async function stMarkTxUsed(txHash: string, fid: number, endpoint: string): Promise<void> {
+  const r = await reducers();
+  await r.mark_tx_used(txHash, fid, endpoint);
 }
 
 // PvP reducers

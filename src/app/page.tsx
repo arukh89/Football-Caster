@@ -13,6 +13,7 @@ import { StarterPackCard } from '@/components/starter/StarterPackCard';
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 // Realtime-only: snapshots removed
 import { DEV_FID } from '@/lib/constants';
+import { stHasEnteredBefore } from '@/lib/spacetime/api';
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useAddMiniApp } from "@/hooks/useAddMiniApp";
 import { useQuickAuth } from "@/hooks/useQuickAuth";
@@ -86,7 +87,13 @@ export default function HomePage(): JSX.Element {
   // Snapshots removed; meta/clubs will be provided by realtime APIs in future
   const meta: any = null;
   const clubs: any = null;
-  const [hasEnteredBefore] = useState<boolean>(false); // TODO: Check from API
+  const [hasEnteredBefore, setHasEnteredBefore] = useState<boolean>(false);
+  
+  // Check if user has entered before
+  useEffect(() => {
+    if (!identity?.fid) return;
+    stHasEnteredBefore(identity.fid).then(setHasEnteredBefore).catch(console.error);
+  }, [identity?.fid]);
 
   const userClub = identity && (clubs as any[])?.find((c: any) => c.fid === identity.fid);
   const isDev = identity?.fid === DEV_FID;

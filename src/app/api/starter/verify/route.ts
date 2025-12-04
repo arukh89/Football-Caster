@@ -5,7 +5,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stHasClaimedStarter, stGrantStarterPack } from '@/lib/spacetime/api';
+import { stHasClaimedStarter, stGrantStarterPack, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
 import { verifyFBCTransfer } from '@/lib/services/verification';
 import { validate, verifyStarterSchema } from '@/lib/middleware/validation';
 import { requireAuth, isDevFID } from '@/lib/middleware/auth';
@@ -46,6 +46,12 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     const already = await stHasClaimedStarter(fid);
     if (already) return NextResponse.json({ error: 'Starter already claimed' }, { status: 409 });
 
+    // Check for transaction replay attack
+    const txUsed = await stIsTxUsed(txHash);
+    if (txUsed) {
+      return NextResponse.json({ error: 'Transaction hash already used' }, { status: 409 });
+    }
+
     // Dev FID bypass
     if (isDevFID(fid)) {
       const pack = generateStarterPack();
@@ -72,6 +78,9 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         { status: 400 }
       );
     }
+
+    // Mark transaction as used to prevent replay
+    await stMarkTxUsed(txHash, fid, '/api/starter/verify');
 
     // Generate and grant pack via Spacetime
     const pack = generateStarterPack();
