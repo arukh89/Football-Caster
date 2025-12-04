@@ -288,7 +288,7 @@ export default function MatchPage(): JSX.Element {
       <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
         <div className="container mx-auto px-4 py-6 max-w-7xl">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
                 <Trophy className="h-6 w-6 text-white" />
@@ -300,7 +300,7 @@ export default function MatchPage(): JSX.Element {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Mode</span>
                 <Button size="sm" variant={mode === 'pvp' ? 'default' : 'outline'} onClick={() => setMode('pvp')}>PvP</Button>

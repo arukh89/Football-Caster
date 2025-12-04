@@ -107,6 +107,7 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps): JSX
             size="sm"
             onClick={onSkip}
             className="absolute top-4 right-4 z-10"
+            aria-label="Close tutorial"
           >
             <X className="h-4 w-4" />
           </Button>

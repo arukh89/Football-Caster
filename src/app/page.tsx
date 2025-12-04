@@ -1,12 +1,12 @@
 'use client'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Trophy, Users, TrendingUp, Zap, ArrowRight, ShoppingBag, Gavel } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GlassCard } from '@/components/glass/GlassCard';
 import { StatPill } from '@/components/glass/StatPill';
 import { Navigation, DesktopNav } from '@/components/Navigation';
-import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
+import { PerformanceChart } from '@/components/PerformanceChart';
 import { UpcomingMatches } from '@/components/dashboard/UpcomingMatches';
 import { OnboardingFlow } from '@/components/tutorial/OnboardingFlow';
 import { StarterPackCard } from '@/components/starter/StarterPackCard';
@@ -18,6 +18,7 @@ import { sdk } from "@farcaster/miniapp-sdk";
 import { useAddMiniApp } from "@/hooks/useAddMiniApp";
 import { useQuickAuth } from "@/hooks/useQuickAuth";
 import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
+import { logger } from '@/lib/log';
 
 export default function HomePage(): JSX.Element {
   const { addMiniApp } = useAddMiniApp();
@@ -45,12 +46,16 @@ export default function HomePage(): JSX.Element {
     setShowTutorial(false);
   };
 
-  // Single SDK initialization with retry logic
+  // Single SDK initialization with guard for strict-mode double invoke
+  const fcInitRef = useRef(false);
   useEffect(() => {
+    if (fcInitRef.current) return;
+    fcInitRef.current = true;
+
     const initializeFarcaster = async () => {
       try {
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         if (document.readyState !== 'complete') {
           await new Promise<void>(resolve => {
             if (document.readyState === 'complete') {
@@ -63,23 +68,23 @@ export default function HomePage(): JSX.Element {
 
         await sdk.actions.ready();
         await addMiniApp();
-        console.log('Farcaster SDK initialized successfully');
+        logger.info('Farcaster SDK initialized successfully');
       } catch (error) {
-        console.error('Failed to initialize Farcaster SDK:', error);
-        
+        logger.error('Failed to initialize Farcaster SDK:', error);
+
         setTimeout(async () => {
           try {
             await sdk.actions.ready();
             await addMiniApp();
-            console.log('Farcaster SDK initialized on retry');
+            logger.info('Farcaster SDK initialized on retry');
           } catch (retryError) {
-            console.error('Farcaster SDK retry failed:', retryError);
+            logger.error('Farcaster SDK retry failed:', retryError);
           }
         }, 1000);
       }
     };
 
-    initializeFarcaster();
+    void initializeFarcaster();
   }, [addMiniApp]);
 
   // Farcaster SDK initialization complete
@@ -152,8 +157,8 @@ export default function HomePage(): JSX.Element {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link href="/match">
-                    <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10">
+                  <Link href="/match" aria-label="Watch match">
+                    <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10" aria-label="Watch match button">
                       ⚽ Watch Match
                       <ArrowRight className="h-5 w-5" />
                     </Button>
@@ -161,7 +166,7 @@ export default function HomePage(): JSX.Element {
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-sm text-muted-foreground" role="status" aria-live="polite" aria-busy="true">
                 Loading identity...
               </div>
             )}
@@ -216,7 +221,7 @@ export default function HomePage(): JSX.Element {
           {/* Quick Actions */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
             <GlassCard hover className="cursor-pointer championship-card">
-              <Link href="/market" className="flex items-center gap-4 p-2">
+              <Link href="/market" className="flex items-center gap-4 p-2" aria-label="Open Player Market">
                 <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
                   <ShoppingBag className="h-8 w-8 text-white" />
                 </div>
@@ -231,7 +236,7 @@ export default function HomePage(): JSX.Element {
             </GlassCard>
 
             <GlassCard hover className="cursor-pointer championship-card">
-              <Link href="/auction" className="flex items-center gap-4 p-2">
+              <Link href="/auction" className="flex items-center gap-4 p-2" aria-label="Open Auctions">
                 <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
                   <Gavel className="h-8 w-8 text-white" />
                 </div>

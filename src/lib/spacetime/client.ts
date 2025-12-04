@@ -99,7 +99,21 @@ export function clientBuilder(): SpacetimeClientBuilder {
 export async function getSpacetime() {
   if (_client) return _client;
   if (!_clientPromise) {
-    _clientPromise = clientBuilder().connect();
+    const connectWithRetry = async (): Promise<any> => {
+      const maxAttempts = 3;
+      let lastErr: any = null;
+      for (let i = 1; i <= maxAttempts; i++) {
+        try {
+          return await clientBuilder().connect();
+        } catch (err) {
+          lastErr = err;
+          const backoffMs = Math.min(500 * 2 ** (i - 1), 4000);
+          await new Promise((r) => setTimeout(r, backoffMs));
+        }
+      }
+      throw lastErr;
+    };
+    _clientPromise = connectWithRetry();
   }
   try {
     const conn = await _clientPromise;

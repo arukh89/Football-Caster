@@ -9,6 +9,16 @@ import { getFBCPrice, calculateFBCAmount } from './pricing';
 const FBC_ADDRESS = (process.env.NEXT_PUBLIC_FBC_ADDRESS as Address) || '0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const RPC_URL = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
 
+function normalizeAddress(addr: Address): Address {
+  return addr.toLowerCase() as Address;
+}
+
+function requiredConfirmations(defaultValue: number): number {
+  const raw = process.env.TX_CONFIRMATIONS;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : defaultValue;
+}
+
 // ERC-20 Transfer event signature
 const TRANSFER_EVENT_SIGNATURE = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
@@ -70,18 +80,18 @@ export async function verifyFBCTransfer(
       return { valid: false, error: 'Transaction failed' };
     }
 
-    // Wait for confirmations (5 blocks)
+    // Wait for confirmations (configurable, default 10)
     const currentBlock = await publicClient.getBlockNumber();
     const confirmations = currentBlock - receipt.blockNumber;
-    
-    if (confirmations < 5) {
-      return { valid: false, error: `Insufficient confirmations: ${confirmations}/5` };
+    const REQUIRED = BigInt(requiredConfirmations(10));
+    if (confirmations < REQUIRED) {
+      return { valid: false, error: `Insufficient confirmations: ${confirmations}/${REQUIRED}` };
     }
 
     // Find Transfer event for FBC token
     const transferLog = receipt.logs.find((log) => {
       return (
-        log.address.toLowerCase() === FBC_ADDRESS.toLowerCase() &&
+        normalizeAddress(log.address as Address) === normalizeAddress(FBC_ADDRESS) &&
         log.topics[0] === TRANSFER_EVENT_SIGNATURE
       );
     });
@@ -96,7 +106,7 @@ export async function verifyFBCTransfer(
     }
 
     // Verify from address
-    if (transfer.from.toLowerCase() !== expectedFrom.toLowerCase()) {
+    if (normalizeAddress(transfer.from) !== normalizeAddress(expectedFrom)) {
       return {
         valid: false,
         error: `Sender mismatch: expected ${expectedFrom}, got ${transfer.from}`,
@@ -104,7 +114,7 @@ export async function verifyFBCTransfer(
     }
 
     // Verify to address
-    if (transfer.to.toLowerCase() !== expectedTo.toLowerCase()) {
+    if (normalizeAddress(transfer.to) !== normalizeAddress(expectedTo)) {
       return {
         valid: false,
         error: `Recipient mismatch: expected ${expectedTo}, got ${transfer.to}`,
@@ -167,18 +177,17 @@ export async function verifyFBCTransferExact(
       return { valid: false, error: 'Transaction not found or failed' };
     }
 
-    // Wait for confirmations (10 blocks for security)
+    // Wait for confirmations (configurable, default 10)
     const currentBlock = await publicClient.getBlockNumber();
     const confirmations = currentBlock - receipt.blockNumber;
-    const REQUIRED_CONFIRMATIONS = 10;
-    
-    if (confirmations < REQUIRED_CONFIRMATIONS) {
-      return { valid: false, error: `Insufficient confirmations: ${confirmations}/${REQUIRED_CONFIRMATIONS}` };
+    const REQUIRED = BigInt(requiredConfirmations(10));
+    if (confirmations < REQUIRED) {
+      return { valid: false, error: `Insufficient confirmations: ${confirmations}/${REQUIRED}` };
     }
 
     const transferLog = receipt.logs.find((log) => {
       return (
-        log.address.toLowerCase() === FBC_ADDRESS.toLowerCase() &&
+        normalizeAddress(log.address as Address) === normalizeAddress(FBC_ADDRESS) &&
         log.topics[0] === TRANSFER_EVENT_SIGNATURE
       );
     });
@@ -194,8 +203,8 @@ export async function verifyFBCTransferExact(
 
     // Verify exact match
     if (
-      transfer.from.toLowerCase() !== expectedFrom.toLowerCase() ||
-      transfer.to.toLowerCase() !== expectedTo.toLowerCase() ||
+      normalizeAddress(transfer.from) !== normalizeAddress(expectedFrom) ||
+      normalizeAddress(transfer.to) !== normalizeAddress(expectedTo) ||
       transfer.value !== BigInt(expectedAmountWei)
     ) {
       return {

@@ -13,8 +13,7 @@ import { PriceTag } from '@/components/glass/PriceTag';
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import { useWallet } from '@/hooks/useWallet';
 import { API_ENDPOINTS } from '@/lib/constants';
-import { payInFBC } from '@/lib/wallet-utils';
-import { formatFBC } from '@/lib/utils';
+import { payInFBC, formatFBC } from '@/lib/wallet-utils';
 import { ChevronLeft, Gavel, ShoppingCart, Plus } from 'lucide-react';
 import { createConfig } from 'wagmi';
 import { wagmiConfig } from '@/lib/wagmi-config';
@@ -241,7 +240,7 @@ export default function AuctionDetailPage(): React.JSX.Element {
                 {bidding ? 'Placing Bid...' : (
                   <>
                     <Gavel className="mr-2 h-4 w-4" />
-                    Place Bid ({formatFBC(auction.bidIncrementFbc)})
+                    Place Bid ({formatFBC(auction.bidIncrementFbc)} FBC)
                   </>
                 )}
               </Button>

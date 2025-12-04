@@ -9,23 +9,26 @@ function iso(ms: number | null | undefined): string | null {
 export async function stGetPlayersMine(fid: number): Promise<Player[]> {
   const st = await getSpacetime();
   const fidBig = BigInt(fid);
-  // Fetch inventory items in memory and filter
-  const inv = (Array.from(st.db.inventoryItem.iter()) as any[]).filter(
-    (row) => row.ownerFid === fidBig && row.itemType === 'player'
-  );
-  // Fetch events for starter pack metadata
-  const evs = (Array.from(st.db.event.iter()) as any[]).filter(
-    (e) => e.actorFid === fidBig && (e.kind === 'StarterPackGranted' || e.kind === 'starter_pack_granted')
-  );
+  // Stream inventory filtering to avoid array materialization
+  const inv: any[] = [];
+  for (const row of st.db.inventoryItem.iter() as Iterable<any>) {
+    if (row.ownerFid === fidBig && row.itemType === 'player') inv.push(row);
+  }
+
+  // Stream events for starter pack metadata
   const meta = new Map<string, any>();
-  for (const e of evs) {
-    try {
-      const payload = JSON.parse(e.payloadJson);
-      for (const p of payload.players || []) meta.set(p.player_id, p);
-    } catch (err) {
-      console.error('Failed to parse starter pack payload', err);
+  for (const e of st.db.event.iter() as Iterable<any>) {
+    if (
+      e.actorFid === fidBig &&
+      (e.kind === 'StarterPackGranted' || e.kind === 'starter_pack_granted')
+    ) {
+      try {
+        const payload = JSON.parse(e.payloadJson);
+        for (const p of payload.players || []) meta.set(p.player_id, p);
+      } catch {}
     }
   }
+
   return inv.map((item) => {
     const m = meta.get(item.itemId) || {};
     const name = m.name ?? `Player ${String(item.itemId).slice(0, 6)}`;

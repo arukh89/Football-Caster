@@ -71,6 +71,8 @@
   },
   "devDependencies": {
     "@anton-seriesfi/ts-typie": "^3.0.2",
+    "@axe-core/playwright": "^4.11.0",
+    "@playwright/test": "^1.57.0",
     "@types/date-fns": "^2.6.3",
     "@types/node": "20.17.47",
     "@types/react": "^18.3.12",

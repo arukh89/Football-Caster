@@ -173,7 +173,7 @@ export default function AuctionPage(): React.JSX.Element {
         <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
           <div className="container mx-auto px-4 py-6 max-w-6xl">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-6">
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                   <Gavel className="h-6 w-6 text-white" />
@@ -185,21 +185,21 @@ export default function AuctionPage(): React.JSX.Element {
                   </p>
                 </div>
               </div>
-              <Link href="/auction/create">
-                <div className="flex items-center gap-2">
-                  <div className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">Live</div>
-                  {lastUpdated && (
-                    <span className="text-xs text-muted-foreground">Updated {Math.floor((Date.now() - lastUpdated)/1000)}s ago</span>
-                  )}
-                  <Button variant="outline" className="gap-2" onClick={() => void manualRefresh()} disabled={loading}>
-                    <RefreshCw className="h-4 w-4" /> Refresh
-                  </Button>
-                </div>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create Auction
+              <div className="flex items-center flex-wrap gap-2">
+                <div className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">Live</div>
+                {lastUpdated && (
+                  <span className="text-xs text-muted-foreground">Updated {Math.floor((Date.now() - lastUpdated)/1000)}s ago</span>
+                )}
+                <Button variant="outline" className="gap-2" onClick={() => void manualRefresh()} disabled={loading}>
+                  <RefreshCw className="h-4 w-4" /> Refresh
                 </Button>
-              </Link>
+                <Link href="/auction/create">
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create Auction
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             <GlassCard className="mb-6 border-purple-500/20">
