@@ -1,6 +1,11 @@
 import type { Player } from '@/lib/types';
 import { reducers, getSpacetime } from './client';
 
+function idx(table: any, indexName: string): any {
+  const v = table?.[indexName];
+  return typeof v === 'function' ? v() : v;
+}
+
 function iso(ms: number | null | undefined): string | null {
   if (!ms && ms !== 0) return null;
   try { return new Date(ms!).toISOString(); } catch { return null; }
@@ -111,7 +116,9 @@ export async function stListActiveAuctions(): Promise<any[]> {
 
 export async function stHasClaimedStarter(fid: number): Promise<boolean> {
   const st = await getSpacetime();
-  return !!(st.db.starterClaim.fid().find(BigInt(fid)) as any);
+  const index = idx(st.db.starterClaim, 'fid');
+  const row = index?.find ? index.find(BigInt(fid)) : undefined;
+  return !!row;
 }
 
 /**
@@ -123,7 +130,8 @@ export async function stHasEnteredBefore(fid: number): Promise<boolean> {
   const hasInventory = (Array.from(st.db.inventoryItem.iter()) as any[]).some(
     (item) => item.ownerFid === BigInt(fid)
   );
-  const hasClaimed = !!(st.db.starterClaim.fid().find(BigInt(fid)) as any);
+  const scIndex = idx(st.db.starterClaim, 'fid');
+  const hasClaimed = !!(scIndex?.find ? scIndex.find(BigInt(fid)) : undefined);
   return hasInventory || hasClaimed;
 }
 
@@ -257,7 +265,8 @@ export async function stInboxMarkRead(fid: number, ids: string[]): Promise<void>
 
 export async function stGetUser(fid: number): Promise<any | null> {
   const st = await getSpacetime();
-  const u = st.db.user.fid().find(BigInt(fid)) as any;
+  const uIndex = idx(st.db.user, 'fid');
+  const u = uIndex?.find ? (uIndex.find(BigInt(fid)) as any) : null;
   return u ? { ...u, fid: Number(u.fid) } : null;
 }
 

@@ -10,7 +10,12 @@ export const CHAIN_CONFIG = {
 
 // Validate critical addresses at import time
 function validateTreasuryAddress(): `0x${string}` {
-  const address = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
+  let address = process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '';
+  address = address.trim();
+  // Strip surrounding quotes if present
+  if ((address.startsWith('"') && address.endsWith('"')) || (address.startsWith("'") && address.endsWith("'"))) {
+    address = address.slice(1, -1).trim();
+  }
   
   if (!address || address === '0x0000000000000000000000000000000000000000') {
     throw new Error(

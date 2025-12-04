@@ -13,9 +13,8 @@ import { createWalletClient, http, createPublicClient } from "viem";
 import { base } from "viem/chains";
 
 interface QuoteResponse {
-  priceWei: string;
-  priceUSD: number;
-  expiresAt: number;
+  amountWei: string;
+  priceUsd: string;
 }
 
 export function StarterPackCard(): JSX.Element | null {
@@ -108,7 +107,7 @@ export function StarterPackCard(): JSX.Element | null {
         walletClient as any, 
         walletPublicClient as any, 
         CONTRACT_ADDRESSES.treasury, 
-        quote.priceWei
+        quote.amountWei
       );
       
       setStep('verifying');
@@ -164,8 +163,8 @@ export function StarterPackCard(): JSX.Element | null {
           
           {quote && step === 'payment' && (
             <div className="mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded">
-              <div className="text-sm">Price: {formatFBC(quote.priceWei)} FBC</div>
-              <div className="text-xs text-muted-foreground">(~${quote.priceUSD} USD)</div>
+              <div className="text-sm">Price: {formatFBC(quote.amountWei)} FBC</div>
+              <div className="text-xs text-muted-foreground">(~${quote.priceUsd} USD)</div>
             </div>
           )}
 
