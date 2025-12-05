@@ -18,14 +18,19 @@
  
  fn parse_wei(x: Option<&str>) -> i128 { x.and_then(|s| s.parse::<i128>().ok()).unwrap_or(0) }
  
- #[table(name = user, public)]
- #[derive(Clone, Serialize, Deserialize)]
- pub struct User {
-     #[primary_key]
-     pub fid: i64,
-     pub wallet: Option<String>,
-     pub created_at_ms: i64,
- }
+#[table(name = user, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct User {
+    #[primary_key]
+    pub fid: i64,
+    pub wallet: Option<String>,
+    pub created_at_ms: i64,
+    // NPC-related extensions
+    pub is_npc: bool,
+    pub elo: i32,
+    pub display_name: Option<String>,
+    pub ai_persona_json: Option<String>,
+}
  
  #[table(name = wallet_link, public)]
  #[derive(Clone, Serialize, Deserialize)]
@@ -50,11 +55,81 @@
      #[primary_key]
      pub item_id: String,
      pub owner_fid: i64,
-     pub item_type: String,
+    // Allowed values: "player", "npc_manager", "squad"
+    pub item_type: String,
      pub acquired_at_ms: i64,
      pub hold_until_ms: i64,
      pub source_event_id: String,
  }
+
+// NPC registry: global pool of AI managers
+#[table(name = npc_registry, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct NpcRegistry {
+    #[primary_key]
+    pub npc_fid: i64, // references user.fid (is_npc=true)
+    pub token_id: Option<String>,
+    pub ai_seed: i64,
+    pub difficulty_tier: i16,
+    pub budget_fbc_wei: String,
+    pub persona: String,
+    pub owner_fid: Option<i64>,
+    // Emotions/state
+    pub manager_confidence: i32,
+    pub pressure_level: i32,
+    pub mood: String, // calm|confident|stressed|angry|cautious
+    // Scheduling
+    pub next_decision_at_ms: i64,
+    pub last_active_ms: i64,
+    pub active: bool,
+}
+
+// Assignment of NPCs to users (starter bundle). Composite key simulated via synthetic id.
+#[table(name = npc_assignment, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct NpcAssignment {
+    #[primary_key]
+    pub id: String, // format: "{user_fid}:{npc_fid}"
+    pub user_fid: i64,
+    pub npc_fid: i64,
+    pub assigned_at_ms: i64,
+}
+
+// Neynar Squad registry (tradable, not a player)
+#[table(name = squad_registry, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SquadRegistry {
+    #[primary_key]
+    pub squad_id: String, // e.g., "squad-{source_fid}"
+    pub source_fid: i64,
+    pub followers: i64,
+    pub intelligence_score: i32, // 0..100
+    pub rank: String,            // S/A/B/C/D
+    pub persona: String,
+    pub token_id: String,        // inventory item id for squad
+    pub owner_fid: i64,
+    pub active: bool,
+}
+
+// Player human-like state tracked over time (for item_type == "player")
+#[table(name = player_state, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PlayerState {
+    #[primary_key]
+    pub player_id: String, // equals inventory_item.item_id for players
+    pub age_years: i16,
+    pub morale: i32,   // 0..100
+    pub fatigue: i32,  // 0..100 (100 = very tired)
+    pub injury_status: String, // none|minor|moderate|severe
+    pub injury_end_ms: Option<i64>,
+    pub satisfaction: i32, // 0..100
+    pub loyalty: i32,      // 0..100
+    // Rolling 7d
+    pub minutes_played_7d: i32,
+    pub matches_played_7d: i32,
+    pub matches_benched_7d: i32,
+    pub last_match_at_ms: Option<i64>,
+}
  
  #[table(name = listing, public)]
  #[derive(Clone, Serialize, Deserialize)]
@@ -174,6 +249,36 @@
      by_pk.update(InventoryItem { owner_fid: to_fid, acquired_at_ms: now_ms(ctx), source_event_id: event_id.to_string(), ..item });
      Ok(())
  }
+
+fn on_item_transferred(ctx: &ReducerContext, item_id: &str, to_fid: i64) {
+    // Update owner in npc_registry or squad_registry based on inventory_item.item_type
+    if let Some(item) = ctx.db().inventory_item().item_id().find(&item_id.to_string()) {
+        match item.item_type.as_str() {
+            "npc_manager" => {
+                // find npc by token_id
+                let tbl = ctx.db().npc_registry();
+                for mut n in tbl.iter() {
+                    if n.token_id.as_deref() == Some(&item_id.to_string()) {
+                        n.owner_fid = Some(to_fid);
+                        tbl.npc_fid().update(n);
+                        break;
+                    }
+                }
+            }
+            "squad" => {
+                let tbl = ctx.db().squad_registry();
+                for mut s in tbl.iter() {
+                    if s.token_id == item_id {
+                        s.owner_fid = to_fid;
+                        tbl.squad_id().update(s);
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
  
  fn append_event(ctx: &ReducerContext, ty: &str, actor_fid: i64, payload_json: String, topic_id: Option<String>) -> Event {
      let id = new_id(ctx, "evt", &format!("{}:{}:{:?}", ty, actor_fid, topic_id));
@@ -210,8 +315,18 @@
      let now = now_ms(ctx);
      let users = ctx.db().user();
      match users.fid().find(&fid) {
-         Some(mut u) => { u.wallet = Some(address.clone()); users.fid().update(u); },
-         None => { users.insert(User { fid, wallet: Some(address.clone()), created_at_ms: now }); }
+        Some(mut u) => { u.wallet = Some(address.clone()); users.fid().update(u); },
+        None => {
+            users.insert(User {
+                fid,
+                wallet: Some(address.clone()),
+                created_at_ms: now,
+                is_npc: false,
+                elo: 1000,
+                display_name: None,
+                ai_persona_json: None,
+            });
+        }
      }
      let link = WalletLink { address: normalize(&address), fid, linked_at_ms: now };
      let wl = ctx.db().wallet_link();
@@ -231,7 +346,7 @@
     if ctx.db().starter_claim().fid().find(&fid).is_some() { panic!("starter_already_claimed"); }
 
     let now = now_ms(ctx);
-    // Record the claim only after validation
+   // Record the claim only after validation
     ctx.db().starter_claim().insert(StarterClaim { fid, claimed_at_ms: now });
 
     // Store a canonical JSON form of the payload in the event for reliable consumers
@@ -266,7 +381,8 @@
      l.closed_at_ms = Some(now_ms(ctx));
      listings.id().update(l.clone());
      let evt = append_event(ctx, "ListingSold", buyer_fid, serde_json::to_string(&l).unwrap_or("{}".into()), Some(listing_id.clone()));
-     transfer_item(ctx, &l.item_id, l.seller_fid, buyer_fid, &evt.id).unwrap();
+    transfer_item(ctx, &l.item_id, l.seller_fid, buyer_fid, &evt.id).unwrap();
+    on_item_transferred(ctx, &l.item_id, buyer_fid);
      push_inbox(ctx, l.seller_fid, format!("listing-sold-{}", evt.id), "listing_sold", "Item Sold!", "Your item was purchased.");
      push_inbox(ctx, buyer_fid, format!("listing-bought-{}", evt.id), "listing_bought", "Purchase Complete", "You bought an item.");
  }
@@ -323,7 +439,8 @@
      a.top_bid_wei = Some(buy_now_wei);
      a.top_bidder_fid = Some(buyer_fid);
      auctions.id().update(a.clone());
-     transfer_item(ctx, &a.item_id, a.seller_fid, buyer_fid, &evt.id).unwrap();
+    transfer_item(ctx, &a.item_id, a.seller_fid, buyer_fid, &evt.id).unwrap();
+    on_item_transferred(ctx, &a.item_id, buyer_fid);
  }
  
  #[reducer]
@@ -336,7 +453,8 @@
      a.status = "finalized".into();
      a.finalized_at_ms = Some(now_ms(ctx));
      auctions.id().update(a.clone());
-     transfer_item(ctx, &a.item_id, a.seller_fid, winner_fid, &evt.id).unwrap();
+    transfer_item(ctx, &a.item_id, a.seller_fid, winner_fid, &evt.id).unwrap();
+    on_item_transferred(ctx, &a.item_id, winner_fid);
  }
  
  #[reducer]
@@ -392,6 +510,54 @@
      if tx_table.tx_hash().find(&tx_hash).is_some() {
          panic!("tx_already_used");
      }
+
+// --- NPC & Squad Reducers (signatures only; implementation later) ---
+
+#[reducer]
+pub fn npc_create(
+    _ctx: &ReducerContext,
+    _npc_fid: i64,
+    _display_name: String,
+    _ai_seed: i64,
+    _difficulty_tier: i16,
+    _budget_fbc_wei: String,
+    _persona_json: String,
+) {
+    unimplemented!("npc_create not implemented yet");
+}
+
+#[reducer]
+pub fn npc_assign_for_user(_ctx: &ReducerContext, _user_fid: i64, _count: i16) {
+    unimplemented!("npc_assign_for_user not implemented yet");
+}
+
+#[reducer]
+pub fn npc_mint_token(_ctx: &ReducerContext, _npc_fid: i64, _owner_fid: i64) -> String {
+    unimplemented!("npc_mint_token not implemented yet");
+}
+
+#[reducer]
+pub fn squad_mint_from_farcaster(
+    _ctx: &ReducerContext,
+    _source_fid: i64,
+    _followers: i64,
+    _owner_fid: i64,
+    _intelligence_score: i32,
+    _rank: String,
+    _persona_json: String,
+) -> String {
+    unimplemented!("squad_mint_from_farcaster not implemented yet");
+}
+
+#[reducer]
+pub fn npc_update_state(
+    _ctx: &ReducerContext,
+    _npc_fid: i64,
+    _next_decision_at_ms: i64,
+    _budget_fbc_wei: String,
+) {
+    unimplemented!("npc_update_state not implemented yet");
+}
      
      // Mark transaction as used
      tx_table.insert(TransactionUsed {
