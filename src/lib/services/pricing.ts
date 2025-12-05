@@ -11,6 +11,13 @@ const CLANKER_URL = 'https://www.clanker.world/clanker/0xcb6e9f9bab4164eaa97c982
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || process.env.PRICE_URL || '';
 const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
+// Optional manual override for local/dev: set any of these envs to a positive number
+const PRICE_OVERRIDE_ENV =
+  process.env.NEXT_PUBLIC_FBC_PRICE_USD ||
+  process.env.NEXT_PUBLIC_PRICE_OVERRIDE ||
+  process.env.FBC_PRICE_USD ||
+  process.env.PRICE_OVERRIDE_USD ||
+  process.env.PRICE_OVERRIDE;
 // USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
 const USDC_DEFAULTS: `0x${string}`[] = [
   '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0',
@@ -27,7 +34,7 @@ const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
 
 interface PriceData {
   priceUsd: string;
-  source: 'clanker' | 'dexscreener' | 'custom' | '0x';
+  source: 'clanker' | 'dexscreener' | 'custom' | '0x' | 'override' | 'uniswap_v3';
   timestamp: number;
 }
 
@@ -452,6 +459,17 @@ async function fetchFromCustom(): Promise<string | null> {
 export async function getFBCPrice(): Promise<PriceData> {
   // Return cached price if valid
   if (cachedPrice && Date.now() - cachedPrice.timestamp < CACHE_TTL) {
+    return cachedPrice;
+  }
+
+  // If manual override provided, use it first (helps local/dev when token isn’t actively traded)
+  const override = (() => {
+    if (!PRICE_OVERRIDE_ENV) return null;
+    const v = parseFloat(String(PRICE_OVERRIDE_ENV));
+    return !isNaN(v) && v > 0 ? String(v) : null;
+  })();
+  if (override) {
+    cachedPrice = { priceUsd: override, source: 'override', timestamp: Date.now() };
     return cachedPrice;
   }
 
