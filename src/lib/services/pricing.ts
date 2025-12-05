@@ -3,7 +3,9 @@
  * Sources priority: 0x/Matcha → Custom URL → Dexscreener → Clanker
  */
 
-import { CONTRACT_ADDRESSES } from '@/lib/constants';
+import { CONTRACT_ADDRESSES, CHAIN_CONFIG } from '@/lib/constants';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
 
 const CLANKER_URL = 'https://www.clanker.world/clanker/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
@@ -23,6 +25,33 @@ interface PriceData {
 
 let cachedPrice: PriceData | null = null;
 const CACHE_TTL = 30 * 1000; // 30 seconds
+
+// lightweight ERC20 decimals ABI
+const ERC20_DECIMALS_ABI = [
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+];
+
+const publicClient = createPublicClient({ chain: base, transport: http(CHAIN_CONFIG.rpcUrl) });
+
+async function getTokenDecimals(addr: `0x${string}`): Promise<number> {
+  try {
+    const dec = await publicClient.readContract({
+      address: addr,
+      abi: ERC20_DECIMALS_ABI as any,
+      functionName: 'decimals',
+      args: [],
+    });
+    return Number(dec) || 18;
+  } catch {
+    return 18;
+  }
+}
 
 /**
  * Fetch FBC price from Clanker
@@ -65,11 +94,12 @@ async function fetchFrom0x(): Promise<string | null> {
       });
       if (!res.ok) continue;
       const data = await res.json().catch(() => null);
-      const buyAmount = data?.buyAmount; // in FBC base units (18 decimals)
+      const buyAmount = data?.buyAmount; // in FBC base units (token decimals)
       if (!buyAmount) continue;
       const buyAmountNum = Number(buyAmount);
       if (!isFinite(buyAmountNum) || buyAmountNum <= 0) continue;
-      const fbcPerUsd = buyAmountNum / 1e18; // FBC you get for 1 USDC
+      const fbcDecimals = await getTokenDecimals(CONTRACT_ADDRESSES.fbc);
+      const fbcPerUsd = buyAmountNum / Math.pow(10, fbcDecimals); // FBC per 1 USDC
       if (!isFinite(fbcPerUsd) || fbcPerUsd <= 0) continue;
       const usdPerFbc = 1 / fbcPerUsd;
       return usdPerFbc.toString();
