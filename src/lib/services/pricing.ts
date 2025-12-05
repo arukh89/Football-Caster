@@ -129,6 +129,16 @@ const UNISWAP_V3_POOL_ABI = [
     inputs: [],
     outputs: [{ name: '', type: 'uint128' }],
   },
+  {
+    name: 'observe',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [ { name: 'secondsAgos', type: 'uint32[]' } ],
+    outputs: [
+      { name: 'tickCumulatives', type: 'int56[]' },
+      { name: 'secondsPerLiquidityCumulativeX128', type: 'uint160[]' },
+    ],
+  },
 ] as const;
 
 function sortTokens(a: `0x${string}`, b: `0x${string}`): [`0x${string}`, `0x${string}`] {
@@ -315,6 +325,131 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
   }
 }
 
+const TWAP_SECONDS: number = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_TWAP_SECONDS || process.env.TWAP_SECONDS || '600');
+  if (!isFinite(raw) || raw <= 0) return 600;
+  return Math.min(Math.max(Math.floor(raw), 60), 3600); // clamp 1m..60m
+})();
+
+function pow1p0001(tick: number): number {
+  // price1Per0 = 1.0001^tick
+  // Use JS double precision; sufficient for quoting display purposes.
+  return Math.pow(1.0001, tick);
+}
+
+function usdPerFbcFromAvgTick(
+  fbc: `0x${string}`,
+  usdc: `0x${string}`,
+  token0: `0x${string}`,
+  avgTick: number,
+  fbcDecimals: number,
+  usdcDecimals: number,
+): string {
+  const price1Per0 = pow1p0001(avgTick); // token1 per token0 (raw units)
+  if (token0.toLowerCase() === fbc.toLowerCase()) {
+    // token0=FBC, token1=USDC → USD/FBC = price1Per0 * 10^(dec0-dec1)
+    const factor = Math.pow(10, fbcDecimals - usdcDecimals);
+    return String(price1Per0 * factor);
+  } else {
+    // token0=USDC, token1=FBC → we have FBC/USDC, invert and apply 10^(dec0-dec1)
+    const factor = Math.pow(10, usdcDecimals - fbcDecimals);
+    const inv = 1 / price1Per0;
+    return String(inv * factor);
+  }
+}
+
+async function observeAvgTick(pool: `0x${string}`, seconds: number): Promise<number | null> {
+  try {
+    const res: any = await publicClient.readContract({
+      address: pool,
+      abi: UNISWAP_V3_POOL_ABI as any,
+      functionName: 'observe',
+      args: [[seconds, 0]],
+    });
+    const ticks: any[] = res?.[0] ?? res?.tickCumulatives;
+    if (!ticks || ticks.length < 2) return null;
+    const t0 = BigInt(ticks[0]);
+    const t1 = BigInt(ticks[1]);
+    const delta = t1 - t0;
+    // integer division toward zero; sufficient
+    const avg = Number(delta / BigInt(seconds));
+    return avg;
+  } catch {
+    return null;
+  }
+}
+
+async function quoteUsdPerFbcFromPoolTwap(tokenA: `0x${string}`, tokenB: `0x${string}`, fee: number, seconds = TWAP_SECONDS): Promise<string | null> {
+  const pool = await getPoolAddress(tokenA, tokenB, fee);
+  if (!pool) return null;
+  const avgTick = await observeAvgTick(pool, seconds);
+  if (avgTick === null) return null;
+  const [t0, t1] = sortTokens(tokenA, tokenB);
+  const fbc = CONTRACT_ADDRESSES.fbc;
+  const usdc = USDC_BASES[0];
+  const [fbcDec, usdcDec] = await Promise.all([
+    getTokenDecimals(fbc),
+    getTokenDecimals(usdc),
+  ]);
+  return usdPerFbcFromAvgTick(fbc, usdc, t0, avgTick, fbcDec, usdcDec);
+}
+
+async function fetchFromUniswapV3Twap(): Promise<string | null> {
+  try {
+    const fbc = CONTRACT_ADDRESSES.fbc;
+    const usdc = USDC_BASES[0];
+
+    // 1) Try direct USDC-FBC pools across fee tiers using TWAP
+    for (const fee of V3_FEE_TIERS) {
+      const price = await quoteUsdPerFbcFromPoolTwap(usdc, fbc, fee, TWAP_SECONDS);
+      if (price) return price;
+    }
+
+    // 2) TWAP multi-hop via WETH: USD/WETH (USDC-WETH) * WETH/FBC (WETH-FBC)
+    let usdPerWeth: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(usdc, WETH_BASE, fee);
+      if (!pool) continue;
+      const avgTick = await observeAvgTick(pool, TWAP_SECONDS);
+      if (avgTick === null) continue;
+      const [t0, t1] = sortTokens(usdc, WETH_BASE);
+      const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
+      // price1Per0 from tick; want USD/WETH
+      const p = usdPerFbcFromAvgTick(t0 as any, t1 as any, t0, avgTick, dec0, dec1); // reusing fn signature
+      usdPerWeth = p;
+      break;
+    }
+    if (!usdPerWeth) return null;
+
+    let wethPerFbc: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(WETH_BASE, fbc, fee);
+      if (!pool) continue;
+      const avgTick = await observeAvgTick(pool, TWAP_SECONDS);
+      if (avgTick === null) continue;
+      const [t0, t1] = sortTokens(WETH_BASE, fbc);
+      const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
+      // price1Per0 from tick; want WETH/FBC
+      const p = usdPerFbcFromAvgTick(t0 as any, t1 as any, t0, avgTick, dec0, dec1);
+      wethPerFbc = p;
+      break;
+    }
+    if (!wethPerFbc) return null;
+
+    // Multiply decimals as numbers; convert to string
+    const toNum = (s: string) => {
+      const n = Number(s);
+      return isFinite(n) ? n : 0;
+    };
+    const out = toNum(usdPerWeth) * toNum(wethPerFbc);
+    if (!isFinite(out) || out <= 0) return null;
+    return String(out);
+  } catch (e) {
+    console.error('Uniswap v3 TWAP price error:', e);
+    return null;
+  }
+}
+
 /**
  * Fetch FBC price from Clanker
  */
@@ -473,13 +608,19 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Prefer: 0x (Matcha) → Dexscreener → Custom → Uniswap v3 (on-chain) → Clanker
+  // Prefer: Uniswap v3 TWAP → Uniswap v3 instantaneous → 0x → Custom → Dexscreener → Clanker
   let priceUsd: string | null = null;
   let source: 'clanker' | 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' = 'dexscreener';
 
+  // Uniswap v3 TWAP first (direct or multi-hop)
+  priceUsd = await fetchFromUniswapV3Twap();
+  if (priceUsd) source = 'uniswap_v3';
+
   // 0x/Matcha (Base)
-  priceUsd = await fetchFrom0x();
-  if (priceUsd) source = '0x';
+  if (!priceUsd) {
+    priceUsd = await fetchFrom0x();
+    if (priceUsd) source = '0x';
+  }
 
   // Custom URL
   if (!priceUsd && CUSTOM_PRICE_URL) {
@@ -493,7 +634,7 @@ export async function getFBCPrice(): Promise<PriceData> {
     if (priceUsd) source = 'dexscreener';
   }
 
-  // Uniswap v3 on-chain (last)
+  // Uniswap v3 on-chain instantaneous (if TWAP unavailable)
   if (!priceUsd) {
     priceUsd = await fetchFromUniswapV3Onchain();
     if (priceUsd) source = 'uniswap_v3';
