@@ -8,6 +8,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+export async function HEAD(): Promise<Response> {
+  return new NextResponse(null, { status: 204 });
+}
+
 export async function GET(req: NextRequest): Promise<Response> {
   try {
     const upstream = new URL('https://base.api.0x.org/swap/v1/quote');
