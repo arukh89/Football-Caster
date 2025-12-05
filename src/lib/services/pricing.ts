@@ -51,7 +51,9 @@ async function fetchFromClanker(): Promise<string | null> {
 async function fetchFrom0x(): Promise<string | null> {
   try {
     const fbc = CONTRACT_ADDRESSES.fbc;
-    const url = `${OX_PRICE_URL}?sellToken=${USDC_BASE}&buyToken=${fbc}&buyAmount=1000000000000000000`;
+    // Use sellAmount (1 USDC) to avoid underflow when FBC price is tiny
+    // Then convert: priceUsd = 1 / (buyAmountFbc)
+    const url = `${OX_PRICE_URL}?sellToken=${USDC_BASE}&buyToken=${fbc}&sellAmount=1000000`;
     const res = await fetch(url, {
       headers: {
         'accept': 'application/json',
@@ -60,11 +62,14 @@ async function fetchFrom0x(): Promise<string | null> {
     });
     if (!res.ok) return null;
     const data = await res.json().catch(() => null);
-    const sellAmount = data?.sellAmount; // in USDC base units (6 decimals)
-    if (!sellAmount) return null;
-    const usd = Number(sellAmount) / 1e6;
-    if (!isFinite(usd) || usd <= 0) return null;
-    return String(usd);
+    const buyAmount = data?.buyAmount; // in FBC base units (18 decimals)
+    if (!buyAmount) return null;
+    const buyAmountNum = Number(buyAmount);
+    if (!isFinite(buyAmountNum) || buyAmountNum <= 0) return null;
+    const fbcPerUsd = buyAmountNum / 1e18; // FBC you get for 1 USDC
+    if (!isFinite(fbcPerUsd) || fbcPerUsd <= 0) return null;
+    const usdPerFbc = 1 / fbcPerUsd;
+    return usdPerFbc.toString();
   } catch (err) {
     console.error('0x price fetch error:', err);
     return null;
@@ -85,11 +90,14 @@ async function fetchFromDexscreener(): Promise<string | null> {
     if (!response.ok) return null;
 
     const data = await response.json();
-    const pair = data.pairs?.[0];
-    
-    if (pair?.priceUsd) {
-      return pair.priceUsd;
-    }
+    const pairs = (data.pairs || []) as any[];
+    // Prefer Base chain pairs with highest liquidity
+    const basePairs = pairs.filter((p) => (p?.chainId?.toString?.() === 'base' || /base/i.test(p?.chainId || '')) && p?.priceUsd);
+    const sorted = (basePairs.length ? basePairs : pairs)
+      .filter((p) => p?.priceUsd)
+      .sort((a, b) => (Number(b?.liquidity?.usd || 0) - Number(a?.liquidity?.usd || 0)));
+    const pair = sorted[0];
+    if (pair?.priceUsd) return String(pair.priceUsd);
     return null;
   } catch (error) {
     console.error('Dexscreener fetch error:', error);

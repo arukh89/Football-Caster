@@ -11,6 +11,7 @@ import { UpcomingMatches } from '@/components/dashboard/UpcomingMatches';
 import { OnboardingFlow } from '@/components/tutorial/OnboardingFlow';
 import { StarterPackCard } from '@/components/starter/StarterPackCard';
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
+import { useWallet } from '@/hooks/useWallet';
 // Realtime-only: snapshots removed
 import { DEV_FID } from '@/lib/constants';
 import { stHasEnteredBefore } from '@/lib/spacetime/api';
@@ -89,6 +90,7 @@ export default function HomePage(): JSX.Element {
 
   // Farcaster SDK initialization complete
   const { identity, isLoading: identityLoading } = useFarcasterIdentity();
+  const { wallet, connect } = useWallet();
   // Snapshots removed; meta/clubs will be provided by realtime APIs in future
   const meta: any = null;
   const clubs: any = null;
@@ -166,8 +168,23 @@ export default function HomePage(): JSX.Element {
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground" role="status" aria-live="polite" aria-busy="true">
-                Loading identity...
+              <div className="flex flex-col items-center gap-3">
+                <div className="text-sm text-muted-foreground">
+                  Welcome! You are browsing in web mode.
+                </div>
+                {!wallet.isConnected ? (
+                  <Button size="lg" onClick={connect} className="gap-2 h-14 text-lg championship-button" aria-label="Connect Wallet">
+                    Connect Wallet
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                ) : (
+                  <Link href="/match" aria-label="Watch match">
+                    <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10">
+                      ⚽ Watch Match
+                      <ArrowRight className="h-5 w-5" />
+                    </Button>
+                  </Link>
+                )}
               </div>
             )}
           </div>
