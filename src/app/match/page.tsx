@@ -13,6 +13,7 @@ import { MatchField } from '@/components/match/MatchField';
 import { MatchCommentary } from '@/components/match/MatchCommentary';
 import { TacticsPanel } from '@/components/match/TacticsPanel';
 import { MatchSimulator, type MatchState, type MatchTactics, type WeatherCondition } from '@/lib/match/engine';
+import { chooseOfficialsForMatch, type OfficialModel } from '@/lib/npc/officials';
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 
 export default function MatchPage(): JSX.Element {
@@ -39,6 +40,9 @@ export default function MatchPage(): JSX.Element {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(1);
   const [commentaryEnabled, setCommentaryEnabled] = useState<boolean>(true);
+  const [officialsPool, setOfficialsPool] = useState<OfficialModel[] | null>(null);
+  const [autoAssigned, setAutoAssigned] = useState<boolean>(false);
+  const [varBanner, setVarBanner] = useState<string | null>(null);
 
   // AI opponent helper
   const buildAiOpponent = useCallback((ps: any[]): any[] => {
@@ -66,6 +70,19 @@ export default function MatchPage(): JSX.Element {
       }
     })();
   }, [identity?.fid]);
+
+  // Load officials pool (for assignment UI)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/officials', { cache: 'no-store' });
+        const j = await r.json();
+        setOfficialsPool((j.officials || []).filter((o: any) => o.active));
+      } catch {
+        setOfficialsPool(null);
+      }
+    })();
+  }, []);
 
   const pollCurrent = useCallback(async () => {
     if (!identity?.fid || mode !== 'pvp') return;
@@ -160,6 +177,12 @@ export default function MatchPage(): JSX.Element {
 
     const interval = setInterval(() => {
       simulator.simulateMinute();
+      const s = simulator.getState();
+      const last = s.events[s.events.length - 1];
+      if (last?.type === 'var_decision') {
+        setVarBanner(last.description || 'VAR review');
+        setTimeout(() => setVarBanner(null), 2500);
+      }
       if (simulator.getState().minute >= 90) {
         setIsPlaying(false);
       }
@@ -208,7 +231,29 @@ export default function MatchPage(): JSX.Element {
 
   const handlePlayPause = useCallback((): void => {
     if (!simulator) return;
-    
+    // Auto-assign officials on first start if available and not yet assigned
+    if (!autoAssigned && !simulator.getState().officials && officialsPool && officialsPool.length >= 3) {
+      const crew = chooseOfficialsForMatch(officialsPool, Date.now(), true);
+      if (crew) {
+        simulator.assignOfficials(crew);
+        setAutoAssigned(true);
+        // Persist assignment server-side when PvP match
+        if (currentMatchId) {
+          void fetch('/api/officials/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              matchId: currentMatchId,
+              refereeId: crew.referee.officialId,
+              assistantLeftId: crew.assistantLeft.officialId,
+              assistantRightId: crew.assistantRight.officialId,
+              varId: crew.varOfficial?.officialId ?? null,
+            }),
+          });
+        }
+      }
+    }
+
     if (!matchState?.isPlaying && matchState?.minute === 0) {
       simulator.start();
     }
@@ -298,6 +343,13 @@ export default function MatchPage(): JSX.Element {
       <DesktopNav />
       <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
         <div className="container mx-auto px-4 py-6 max-w-7xl">
+          {varBanner && (
+            <div className="mb-3">
+              <GlassCard className="p-3 border-2 border-yellow-400/60 bg-yellow-50/40">
+                <div className="text-sm font-semibold">{varBanner}</div>
+              </GlassCard>
+            </div>
+          )}
           {/* Header */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
@@ -378,6 +430,30 @@ export default function MatchPage(): JSX.Element {
               <SkipForward className="h-5 w-5" />
               +1 Min
             </Button>
+            <div className="hidden md:flex items-center gap-2">
+              <span className="text-sm">Officials:</span>
+              <Button size="sm" variant="outline" disabled={!simulator || !officialsPool || officialsPool.length < 3}
+                onClick={() => {
+                  if (!simulator || !officialsPool) return;
+                  const crew = chooseOfficialsForMatch(officialsPool, Date.now(), true);
+                  if (!crew) return;
+                  simulator.assignOfficials(crew);
+                  setAutoAssigned(true);
+                  if (currentMatchId) {
+                    void fetch('/api/officials/assign', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        matchId: currentMatchId,
+                        refereeId: crew.referee.officialId,
+                        assistantLeftId: crew.assistantLeft.officialId,
+                        assistantRightId: crew.assistantRight.officialId,
+                        varId: crew.varOfficial?.officialId ?? null,
+                      }),
+                    });
+                  }
+                }}
+              >Auto-assign</Button>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-sm">Speed:</span>
               <Button
@@ -457,6 +533,45 @@ export default function MatchPage(): JSX.Element {
                       </span>
                     </div>
                   )}
+                </div>
+              </GlassCard>
+              {/* Officials info */}
+              <GlassCard className="championship-card">
+                <h3 className="font-bold mb-3">Officials</h3>
+                {matchState.officials ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span>Referee</span><span className="font-mono">{matchState.officials.referee}</span></div>
+                    <div className="flex justify-between"><span>Asst. Left</span><span className="font-mono">{matchState.officials.assistantLeft}</span></div>
+                    <div className="flex justify-between"><span>Asst. Right</span><span className="font-mono">{matchState.officials.assistantRight}</span></div>
+                    {matchState.officials.varOfficial && (
+                      <div className="flex justify-between"><span>VAR</span><span className="font-mono">{matchState.officials.varOfficial}</span></div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">No officials assigned yet.</div>
+                )}
+                <div className="pt-3">
+                  <Button size="sm" variant="outline" className="w-full" disabled={!officialsPool || !simulator}
+                    onClick={() => {
+                      if (!simulator || !officialsPool) return;
+                      const crew = chooseOfficialsForMatch(officialsPool, Date.now(), true);
+                      if (!crew) return;
+                      simulator.assignOfficials(crew);
+                      setAutoAssigned(true);
+                      if (currentMatchId) {
+                        void fetch('/api/officials/assign', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            matchId: currentMatchId,
+                            refereeId: crew.referee.officialId,
+                            assistantLeftId: crew.assistantLeft.officialId,
+                            assistantRightId: crew.assistantRight.officialId,
+                            varId: crew.varOfficial?.officialId ?? null,
+                          }),
+                        });
+                      }
+                    }}
+                  >Assign crew</Button>
                 </div>
               </GlassCard>
 
