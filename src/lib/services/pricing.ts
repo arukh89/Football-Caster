@@ -16,8 +16,8 @@ const USDC_BASES: `0x${string}`[] = [
   '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0',
 ];
 const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
-// Uniswap V3 Factory (constant across many networks)
-const UNISWAP_V3_FACTORY: `0x${string}` = '0x1F98431c8aD98523631AE4a59f267346ea31F984';
+// Uniswap V3 Factory on Base (per official deployments)
+const UNISWAP_V3_FACTORY: `0x${string}` = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
 const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
 
 interface PriceData {
