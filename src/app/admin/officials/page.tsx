@@ -104,6 +104,7 @@ export default function OfficialsAdminPage(): JSX.Element {
                     <tr className="text-left border-b">
                       <th className="py-2">Role</th>
                       <th className="py-2">ID</th>
+                      <th className="py-2">Status</th>
                       <th className="py-2 text-right">Strict</th>
                       <th className="py-2 text-right">Adv</th>
                       <th className="py-2 text-right">OffTol</th>
@@ -111,15 +112,18 @@ export default function OfficialsAdminPage(): JSX.Element {
                       <th className="py-2 text-right">Cons</th>
                       <th className="py-2 text-right">Fit</th>
                       <th className="py-2 text-right">Rep</th>
+                      <th className="py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {officials.map((o) => (
+                    {officials.map((o, idx) => (
                       <tr key={o.officialId} className="border-b last:border-0">
                         <td className="py-2">{roleBadge(o.role)}</td>
                         <td className="py-2">
                           <div className="text-xs font-mono">{o.officialId}</div>
-                          {!o.active && <Badge variant="secondary" className="ml-1">inactive</Badge>}
+                        </td>
+                        <td className="py-2">
+                          {o.active ? <Badge className="bg-emerald-500">active</Badge> : <Badge variant="secondary">inactive</Badge>}
                         </td>
                         <td className="py-2 text-right">{o.strictness}</td>
                         <td className="py-2 text-right">{o.advantageTendency}</td>
@@ -128,6 +132,15 @@ export default function OfficialsAdminPage(): JSX.Element {
                         <td className="py-2 text-right">{o.consistency}</td>
                         <td className="py-2 text-right">{o.fitness}</td>
                         <td className="py-2 text-right">{o.reputation}</td>
+                        <td className="py-2 text-right">
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            const next = !o.active
+                            try { await fetch('/api/officials/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ officialId: o.officialId, active: next }) }) } catch {}
+                            setOfficials((prev) => prev.map((x, i) => i === idx ? { ...x, active: next } : x))
+                          }}>
+                            {o.active ? 'Deactivate' : 'Activate'}
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

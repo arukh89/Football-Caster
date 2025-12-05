@@ -10,9 +10,11 @@ interface MatchCommentaryProps {
   events: MatchEventData[];
   enabled: boolean;
   onToggle: () => void;
+  tone?: 'calm' | 'enthusiastic' | 'critical' | 'dramatic';
+  lang?: 'id' | 'en';
 }
 
-export function MatchCommentary({ events, enabled, onToggle }: MatchCommentaryProps): JSX.Element {
+export function MatchCommentary({ events, enabled, onToggle, tone = 'calm', lang = 'id' }: MatchCommentaryProps): JSX.Element {
   const getDotClass = (sig: MatchEventData['significance']): string => {
     switch (sig) {
       case 'critical':
@@ -24,6 +26,41 @@ export function MatchCommentary({ events, enabled, onToggle }: MatchCommentaryPr
       default:
         return 'bg-gray-500';
     }
+  };
+
+  const formatText = (ev: MatchEventData): string => {
+    const base = ev.commentary || ev.description || '';
+    // Simple localization if English selected
+    if (lang === 'en') {
+      const type = ev.type;
+      const who = ev.player || (ev.team === 'home' ? 'Home' : 'Away');
+      const decisions = ev.meta?.decision ? String(ev.meta.decision) : '';
+      const reason = ev.meta?.reason ? String(ev.meta.reason) : '';
+      const map: Record<string, string> = {
+        kickoff: 'Kickoff!',
+        goal: `${who} scores!`,
+        shot: `${who} takes a shot.`,
+        save: `Great save by the keeper!`,
+        corner: `Corner kick.`,
+        freekick: `Free-kick awarded.`,
+        penalty: `Penalty!`,
+        yellow_card: `Yellow card.`,
+        red_card: `Red card!`,
+        substitution: `Tactical change.`,
+        injury: `An injury on the field.`,
+        offside: `Offside.`,
+        foul: `Foul committed.`,
+        var_decision: decisions ? `VAR decision: ${decisions}${reason ? ` (${reason})` : ''}.` : `VAR decision announced.`,
+        half_time: `Half-time.`,
+        full_time: `Full-time.`,
+      };
+      return map[type] || base;
+    }
+    // Tone styling
+    if (tone === 'enthusiastic') return base.replace(/\.$/, '!') + '!';
+    if (tone === 'dramatic') return `Wow! ${base}`;
+    if (tone === 'critical') return `Catatan: ${base}`;
+    return base;
   };
 
   return (
@@ -51,7 +88,7 @@ export function MatchCommentary({ events, enabled, onToggle }: MatchCommentaryPr
               <div className={`w-2 h-2 rounded-full mt-2 ${getDotClass(ev.significance)}`} />
               <div className="flex-1">
                 <div className="text-xs text-muted-foreground">{ev.minute}' • {ev.type.replace('_', ' ')}</div>
-                <div className="text-sm">{ev.commentary || ev.description}</div>
+                <div className="text-sm">{formatText(ev)}</div>
               </div>
             </div>
           ))}

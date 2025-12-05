@@ -436,6 +436,10 @@ export async function stCommentaryAppend(matchId: string, tsMs: number, tone: st
   await callReducerCompat('commentary_append', [matchId, tsMs, tone, lang, text, metaJson], { matchId, tsMs, tone, lang, text, metaJson });
 }
 
+export async function stOfficialSetActive(officialId: string, active: boolean): Promise<void> {
+  await callReducerCompat('official_set_active', [officialId, active], { officialId, active });
+}
+
 // PvP reducers
 export async function stPvpChallenge(challengerFid: number, challengedFid: number): Promise<{ id: string }> {
   const r = await reducers();

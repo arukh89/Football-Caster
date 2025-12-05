@@ -40,6 +40,8 @@ export default function MatchPage(): JSX.Element {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(1);
   const [commentaryEnabled, setCommentaryEnabled] = useState<boolean>(true);
+  const [tone, setTone] = useState<'calm' | 'enthusiastic' | 'critical' | 'dramatic'>('calm');
+  const [lang, setLang] = useState<'id' | 'en'>('id');
   const [officialsPool, setOfficialsPool] = useState<OfficialModel[] | null>(null);
   const [autoAssigned, setAutoAssigned] = useState<boolean>(false);
   const [varBanner, setVarBanner] = useState<string | null>(null);
@@ -190,6 +192,46 @@ export default function MatchPage(): JSX.Element {
 
     return () => clearInterval(interval);
   }, [simulator, isPlaying, speed]);
+
+  // Log new events to backend (only when PvP matchId exists)
+  useEffect(() => {
+    if (!currentMatchId || !matchState) return;
+    // Keep track between renders
+    const key = `match_prev_count_${currentMatchId}`;
+    const prevStr = sessionStorage.getItem(key);
+    const prev = prevStr ? Number(prevStr) : 0;
+    const events = matchState.events || [];
+    const newEvents = events.slice(prev);
+    if (newEvents.length > 0) {
+      for (const ev of newEvents) {
+        // Commentary log
+        void fetch('/api/match/commentary', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            matchId: currentMatchId,
+            tsMs: Date.now(),
+            tone, lang,
+            text: ev.commentary || ev.description,
+            meta: { type: ev.type, minute: ev.minute, team: ev.team, player: ev.player, significance: ev.significance, ...(ev.meta || {}) },
+          })
+        });
+        // VAR specific log
+        if (ev.type === 'var_decision' && ev.meta?.decision) {
+          void fetch('/api/match/var-log', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              matchId: currentMatchId,
+              tsMs: Date.now(),
+              decision: ev.meta.decision,
+              reason: ev.meta.reason || '',
+              meta: { minute: ev.minute, team: ev.team }
+            })
+          });
+        }
+      }
+      sessionStorage.setItem(key, String(events.length));
+    }
+  }, [matchState?.events?.length, currentMatchId, tone, lang]);
 
   // Auto submit result on full-time
   useEffect(() => {
@@ -594,11 +636,29 @@ export default function MatchPage(): JSX.Element {
           </div>
 
           {/* Commentary */}
-          <MatchCommentary
-            events={matchState.events}
-            enabled={commentaryEnabled}
-            onToggle={() => setCommentaryEnabled(!commentaryEnabled)}
-          />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Tone</span>
+                {(['calm','enthusiastic','critical','dramatic'] as const).map((t) => (
+                  <Button key={t} size="sm" variant={tone === t ? 'default' : 'outline'} onClick={() => setTone(t)}>{t}</Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Lang</span>
+                <Button size="sm" variant={lang === 'id' ? 'default' : 'outline'} onClick={() => setLang('id')}>ID</Button>
+                <Button size="sm" variant={lang === 'en' ? 'default' : 'outline'} onClick={() => setLang('en')}>EN</Button>
+              </div>
+            </div>
+
+            <MatchCommentary
+              events={matchState.events}
+              enabled={commentaryEnabled}
+              onToggle={() => setCommentaryEnabled(!commentaryEnabled)}
+              tone={tone}
+              lang={lang}
+            />
+          </div>
         </div>
       </div>
       <Navigation />

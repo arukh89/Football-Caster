@@ -84,6 +84,7 @@ export interface MatchEventData {
   description: string;
   commentary: string;
   significance: 'low' | 'medium' | 'high' | 'critical';
+  meta?: Record<string, any>;
 }
 
 export class MatchSimulator {
@@ -298,6 +299,9 @@ export class MatchSimulator {
     if (v) {
       const chance = require('../npc/officials').varReviewChance(v);
       if (Math.random() < chance) {
+        // Select reason and decision
+        const reasons = ['offside', 'foul', 'handball'] as const;
+        const reason = reasons[Math.floor(Math.random() * reasons.length)];
         // 25% chance to overturn
         const overturn = Math.random() < 0.25;
         if (overturn) {
@@ -308,9 +312,10 @@ export class MatchSimulator {
           type: 'var_decision',
           minute: this.state.minute,
           team,
-          description: overturn ? 'VAR: Goal disallowed.' : 'VAR: Goal stands.' ,
+          description: overturn ? `VAR: Goal disallowed (${reason}).` : 'VAR: Goal stands.',
           commentary: this.generateCommentary('var_decision', team),
           significance: overturn ? 'high' : 'medium',
+          meta: { decision: overturn ? 'disallowed' : 'stands', reason },
         });
       }
     }

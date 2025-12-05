@@ -89,6 +89,23 @@ export function Navigation(): JSX.Element {
                 <span className="text-xs font-medium text-center">Admin</span>
               </Link>
             )}
+            {showAdmin && (
+              <Link
+                href="/admin/officials"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex flex-col items-center gap-1 px-2 py-3 rounded-lg transition-colors',
+                  pathname === '/admin/officials'
+                    ? 'bg-emerald-500/10 text-emerald-500'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+                aria-current={pathname === '/admin/officials' ? 'page' : undefined}
+                aria-label="Officials"
+              >
+                <Settings className="h-6 w-6" />
+                <span className="text-xs font-medium text-center">Officials</span>
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -166,6 +183,22 @@ export function DesktopNav(): JSX.Element {
             >
               <Settings className="h-5 w-5" />
               <span className="font-medium">Admin</span>
+            </Link>
+          )}
+          {showAdmin && (
+            <Link
+              href="/admin/officials"
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
+                pathname === '/admin/officials'
+                  ? 'bg-emerald-500/10 text-emerald-500'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+              aria-current={pathname === '/admin/officials' ? 'page' : undefined}
+              aria-label="Officials"
+            >
+              <Settings className="h-5 w-5" />
+              <span className="font-medium">Officials</span>
             </Link>
           )}
           <Link
