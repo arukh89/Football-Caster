@@ -4,7 +4,7 @@ import { readContract, waitForTransactionReceipt } from 'viem/actions';
 import { base } from 'viem/chains';
 import { CONTRACT_ADDRESSES } from './constants';
 import { sendTx } from '@/lib/onchain/sendTx';
-const OX_QUOTE_URL = 'https://base.api.0x.org/swap/v1/quote';
+const OX_QUOTE_URL = '/api/zeroex/quote';
 
 // ERC20 ABI for approve and transfer functions
 const ERC20_ABI = [
