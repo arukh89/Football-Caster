@@ -15,6 +15,10 @@ const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
 const USDC_BASES: `0x${string}`[] = [
   '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0',
 ];
+const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
+// Uniswap V3 Factory (constant across many networks)
+const UNISWAP_V3_FACTORY: `0x${string}` = '0x1F98431c8aD98523631AE4a59f267346ea31F984';
+const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
 
 interface PriceData {
   priceUsd: string;
@@ -73,6 +77,218 @@ function divToDecimalString(numerator: bigint, denominator: bigint, precision = 
   const intPart = scaled / scale;
   const fracPart = (scaled % scale).toString().padStart(precision, '0').replace(/0+$/, '');
   return fracPart.length ? `${intPart.toString()}.${fracPart}` : intPart.toString();
+}
+
+// Minimal ABIs for Uniswap V3
+const UNISWAP_V3_FACTORY_ABI = [
+  {
+    name: 'getPool',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+    ],
+    outputs: [{ name: 'pool', type: 'address' }],
+  },
+] as const;
+
+const UNISWAP_V3_POOL_ABI = [
+  {
+    name: 'slot0',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'sqrtPriceX96', type: 'uint160' },
+      { name: 'tick', type: 'int24' },
+      { name: 'observationIndex', type: 'uint16' },
+      { name: 'observationCardinality', type: 'uint16' },
+      { name: 'observationCardinalityNext', type: 'uint16' },
+      { name: 'feeProtocol', type: 'uint8' },
+      { name: 'unlocked', type: 'bool' },
+    ],
+  },
+  {
+    name: 'liquidity',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint128' }],
+  },
+] as const;
+
+function sortTokens(a: `0x${string}`, b: `0x${string}`): [`0x${string}`, `0x${string}`] {
+  return a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
+}
+
+async function getPoolAddress(tokenA: `0x${string}`, tokenB: `0x${string}`, fee: number): Promise<`0x${string}` | null> {
+  const [t0, t1] = sortTokens(tokenA, tokenB);
+  const pool = await publicClient.readContract({
+    address: UNISWAP_V3_FACTORY,
+    abi: UNISWAP_V3_FACTORY_ABI as any,
+    functionName: 'getPool',
+    args: [t0, t1, fee],
+  });
+  const addr = (pool as string).toLowerCase();
+  if (addr === '0x0000000000000000000000000000000000000000') return null;
+  return pool as `0x${string}`;
+}
+
+async function readPoolState(pool: `0x${string}`): Promise<{ sqrtPriceX96: bigint; liquidity: bigint } | null> {
+  try {
+    const [slot0, liquidity] = await Promise.all([
+      publicClient.readContract({ address: pool, abi: UNISWAP_V3_POOL_ABI as any, functionName: 'slot0', args: [] }) as Promise<any>,
+      publicClient.readContract({ address: pool, abi: UNISWAP_V3_POOL_ABI as any, functionName: 'liquidity', args: [] }) as Promise<bigint>,
+    ]);
+    const sqrtPriceX96 = BigInt(slot0?.[0] ?? slot0?.sqrtPriceX96 ?? 0);
+    return { sqrtPriceX96, liquidity: BigInt(liquidity) };
+  } catch {
+    return null;
+  }
+}
+
+function pow10(n: number): bigint { return 10n ** BigInt(n); }
+
+function usdPerFbcFromSqrt(
+  fbc: `0x${string}`,
+  usdc: `0x${string}`,
+  token0: `0x${string}`,
+  sqrtPriceX96: bigint,
+  fbcDecimals: number,
+  usdcDecimals: number,
+): string {
+  // priceRaw = (sqrtPriceX96^2) / 2^192 = token1/token0 in base units
+  const ratioX192 = (sqrtPriceX96 * sqrtPriceX96);
+  const q192 = 2n ** 192n;
+  const decDiff = fbcDecimals - usdcDecimals; // typically 12
+  const scale = decDiff >= 0 ? pow10(decDiff) : 1n;
+  const invScale = decDiff < 0 ? pow10(-decDiff) : 1n;
+
+  if (token0.toLowerCase() === fbc.toLowerCase()) {
+    // token0 = FBC, token1 = USDC → P = USDC per FBC (decimalized)
+    // USD/FBC = (ratioX192 * 10^(d0-d1)) / 2^192
+    const numerator = ratioX192 * scale;
+    const denominator = q192 * invScale;
+    return divToDecimalString(numerator, denominator, 12);
+  } else {
+    // token0 = USDC, token1 = FBC → P = FBC per USDC → USD/FBC = 1/P
+    // USD/FBC = (2^192) / (ratioX192 * 10^(d0-d1))
+    const numerator = q192 * invScale;
+    const denominator = ratioX192 * scale;
+    return divToDecimalString(numerator, denominator, 12);
+  }
+}
+
+async function quoteUsdPerFbcFromPool(tokenA: `0x${string}`, tokenB: `0x${string}`, fee: number): Promise<string | null> {
+  const pool = await getPoolAddress(tokenA, tokenB, fee);
+  if (!pool) return null;
+  const state = await readPoolState(pool);
+  if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) return null;
+  const [t0, t1] = sortTokens(tokenA, tokenB);
+  const fbc = CONTRACT_ADDRESSES.fbc;
+  const usdc = USDC_BASES[0];
+  const [fbcDec, usdcDec] = await Promise.all([
+    getTokenDecimals(fbc),
+    getTokenDecimals(usdc),
+  ]);
+  return usdPerFbcFromSqrt(fbc, usdc, t0, state.sqrtPriceX96, fbcDec, usdcDec);
+}
+
+async function fetchFromUniswapV3Onchain(): Promise<string | null> {
+  try {
+    const fbc = CONTRACT_ADDRESSES.fbc;
+    const usdc = USDC_BASES[0];
+
+    // 1) Try direct USDC-FBC pools across common fee tiers
+    for (const fee of V3_FEE_TIERS) {
+      const price = await quoteUsdPerFbcFromPool(usdc, fbc, fee);
+      if (price) return price;
+    }
+
+    // 2) Try via WETH: USD/WETH * WETH/FBC
+    // USDC-WETH
+    let usdPerWeth: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(usdc, WETH_BASE, fee);
+      if (!pool) continue;
+      const state = await readPoolState(pool);
+      if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) continue;
+      const [t0, _t1] = sortTokens(usdc, WETH_BASE);
+      const [usdcDec, wethDec] = await Promise.all([
+        getTokenDecimals(usdc),
+        getTokenDecimals(WETH_BASE),
+      ]);
+      // Compute USDC per WETH
+      // If token0 = WETH, P = USDC per WETH; else invert
+      const ratioX192 = (state.sqrtPriceX96 * state.sqrtPriceX96);
+      const q192 = 2n ** 192n;
+      const decDiff = wethDec - usdcDec;
+      const scale = decDiff >= 0 ? pow10(decDiff) : 1n;
+      const invScale = decDiff < 0 ? pow10(-decDiff) : 1n;
+      let val: string;
+      if (t0.toLowerCase() === WETH_BASE.toLowerCase()) {
+        // token0=WETH → USDC/WETH = (ratio * 10^(d0-d1)) / 2^192
+        val = divToDecimalString(ratioX192 * scale, q192 * invScale, 12);
+      } else {
+        // token0=USDC → WETH/USDC → invert
+        val = divToDecimalString(q192 * invScale, ratioX192 * scale, 12);
+      }
+      usdPerWeth = val;
+      break;
+    }
+
+    if (!usdPerWeth) return null;
+
+    // WETH-FBC
+    let wethPerFbc: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(WETH_BASE, fbc, fee);
+      if (!pool) continue;
+      const state = await readPoolState(pool);
+      if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) continue;
+      const [t0, _t1] = sortTokens(WETH_BASE, fbc);
+      const [wethDec, fbcDec] = await Promise.all([
+        getTokenDecimals(WETH_BASE),
+        getTokenDecimals(fbc),
+      ]);
+      // Compute WETH per FBC
+      const ratioX192 = (state.sqrtPriceX96 * state.sqrtPriceX96);
+      const q192 = 2n ** 192n;
+      const decDiff = fbcDec - wethDec;
+      const scale = decDiff >= 0 ? pow10(decDiff) : 1n;
+      const invScale = decDiff < 0 ? pow10(-decDiff) : 1n;
+      let val: string;
+      if (t0.toLowerCase() === fbc.toLowerCase()) {
+        // token0=FBC → WETH per FBC = (ratio * 10^(d0-d1)) / 2^192
+        val = divToDecimalString(ratioX192 * scale, q192 * invScale, 12);
+      } else {
+        // token0=WETH → FBC per WETH → invert to WETH/FBC
+        val = divToDecimalString(q192 * invScale, ratioX192 * scale, 12);
+      }
+      wethPerFbc = val;
+      break;
+    }
+
+    if (!wethPerFbc) return null;
+
+    // USD/FBC = (USD/WETH) * (WETH/FBC)
+    // Multiply two decimal strings precisely via BigInt with 12+12 precision
+    const toScaled = (s: string) => {
+      const [i, f = ''] = s.split('.');
+      return BigInt(i + (f + '000000000000').slice(0, 12));
+    };
+    const usdPerWethScaled = toScaled(usdPerWeth);
+    const wethPerFbcScaled = toScaled(wethPerFbc);
+    const productScaled = (usdPerWethScaled * wethPerFbcScaled) / (10n ** 12n);
+    const intPart = productScaled / (10n ** 12n);
+    const frac = (productScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+    return frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+  } catch (e) {
+    console.error('Uniswap v3 on-chain price error:', e);
+    return null;
+  }
 }
 
 /**
@@ -222,13 +438,19 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Prefer 0x (Matcha), then custom endpoint, then Dexscreener, then Clanker HTML
+  // Prefer Uniswap v3 on-chain, then 0x (Matcha), then custom endpoint, then Dexscreener, then Clanker HTML
   let priceUsd: string | null = null;
-  let source: 'clanker' | 'dexscreener' | 'custom' | '0x' = 'dexscreener';
+  let source: 'clanker' | 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' = 'dexscreener';
+
+  // Uniswap v3 on-chain
+  priceUsd = await fetchFromUniswapV3Onchain();
+  if (priceUsd) source = 'uniswap_v3';
 
   // 0x/Matcha
-  priceUsd = await fetchFrom0x();
-  if (priceUsd) source = '0x';
+  if (!priceUsd) {
+    priceUsd = await fetchFrom0x();
+    if (priceUsd) source = '0x';
+  }
 
   // Custom URL
   if (!priceUsd && CUSTOM_PRICE_URL) {
