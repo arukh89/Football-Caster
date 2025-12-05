@@ -14,24 +14,37 @@ function sanitize(input: string | undefined, fallback: string): string {
   return s;
 }
 
-// Support both STDB_* and SPACETIME_* env names, prefer STDB_*
-const DEFAULT_URI = sanitize(
-  env.STDB_URI || env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI,
-  'wss://maincloud.spacetimedb.com'
-);
-const DEFAULT_DB_NAME = sanitize(
-  env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME,
-  'footballcaster2'
-);
+// Read env dynamically so hot-reload picks up .env.local changes without full restart
+function readEnv(): { URI: string; DB_NAME: string; FALLBACK_URI?: string; FALLBACK_URIS?: string[]; DEV_FALLBACK?: boolean } {
+  const URI = sanitize(
+    env.STDB_URI || env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI,
+    'wss://maincloud.spacetimedb.com'
+  );
+  const DB_NAME = sanitize(
+    env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME,
+    'footballcaster2'
+  );
+  const FALLBACK_URI = sanitize(env.STDB_FALLBACK_URI, 'ws://127.0.0.1:3100');
+  const FALLBACK_URIS = [FALLBACK_URI, 'ws://127.0.0.1:3000', 'ws://127.0.0.1:3001', 'ws://127.0.0.1:3002'];
+  const DEV_FALLBACK = (env.ENABLE_DEV_FALLBACK || '').toLowerCase() === 'true';
+  return { URI, DB_NAME, FALLBACK_URI, FALLBACK_URIS, DEV_FALLBACK };
+}
 
 // Lazy import so client bundles don't include Node-only modules
 let _client: any | null = null;
 let _clientPromise: Promise<any> | null = null;
+let _lastEnv: { URI: string; DB_NAME: string; FALLBACK_URI?: string; FALLBACK_URIS?: string[]; DEV_FALLBACK?: boolean } | null = null;
 
 export class SpacetimeClientBuilder {
-  private _uri: string = DEFAULT_URI;
-  private _dbName: string = DEFAULT_DB_NAME;
+  private _uri: string;
+  private _dbName: string;
   private _token: string | null = null;
+
+  constructor() {
+    const { URI, DB_NAME } = readEnv();
+    this._uri = URI;
+    this._dbName = DB_NAME;
+  }
 
   uri(v: string): this { this._uri = v; return this; }
   database(v: string): this { this._dbName = v; return this; }
@@ -95,6 +108,14 @@ export function clientBuilder(): SpacetimeClientBuilder {
 }
 
 export async function getSpacetime() {
+  const currentEnv = readEnv();
+  // If env changed, drop existing connection so we reconnect with new target
+  const envChanged = !_lastEnv || _lastEnv.URI !== currentEnv.URI || _lastEnv.DB_NAME !== currentEnv.DB_NAME;
+  if (envChanged) {
+    _client = null;
+    _clientPromise = null;
+    _lastEnv = currentEnv;
+  }
   if (_client) return _client;
   if (!_clientPromise) {
     const connectWithRetry = async (): Promise<any> => {
@@ -105,6 +126,20 @@ export async function getSpacetime() {
           return await clientBuilder().connect();
         } catch (err) {
           lastErr = err;
+          // Try dev fallback once if enabled and primary URI appears local and failing
+          const { DEV_FALLBACK, FALLBACK_URIS, URI } = _lastEnv || currentEnv;
+          const isLocalPrimary = URI?.includes('127.0.0.1') || URI?.includes('localhost');
+          if (DEV_FALLBACK && isLocalPrimary && Array.isArray(FALLBACK_URIS)) {
+            for (const cand of FALLBACK_URIS) {
+              if (!cand || cand === URI) continue;
+              try {
+                _lastEnv = { ...currentEnv, URI: cand };
+                return await clientBuilder().uri(cand).connect();
+              } catch (err2) {
+                lastErr = err2;
+              }
+            }
+          }
           const backoffMs = Math.min(500 * 2 ** (i - 1), 4000);
           await new Promise((r) => setTimeout(r, backoffMs));
         }
@@ -124,7 +159,7 @@ export async function getSpacetime() {
 }
 
 export function getEnv() {
-  return { URI: DEFAULT_URI, DB_NAME: DEFAULT_DB_NAME };
+  return readEnv();
 }
 
 // Placeholder typed helpers – replaced by generated bindings later
