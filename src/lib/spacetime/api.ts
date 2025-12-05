@@ -275,8 +275,9 @@ export async function stGetUser(fid: number): Promise<any | null> {
  */
 export async function stIsTxUsed(txHash: string): Promise<boolean> {
   const st = await getSpacetime();
-  const tx = st.db.transactionUsed.txHash().find(txHash);
-  return !!tx;
+  const txIndex = idx(st.db.transactionUsed, 'txHash');
+  const row = txIndex?.find ? txIndex.find(txHash) : undefined;
+  return !!row;
 }
 
 /**
