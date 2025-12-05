@@ -9,8 +9,11 @@ const CLANKER_URL = 'https://www.clanker.world/clanker/0xcb6e9f9bab4164eaa97c982
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || process.env.PRICE_URL || '';
 const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
-// Canonical USDC on Base mainnet
-const USDC_BASE: `0x${string}` = '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0';
+// USDC variants on Base (official + bridged USDbC)
+const USDC_BASES: `0x${string}`[] = [
+  '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0', // USDC (official)
+  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDbC (legacy)
+];
 
 interface PriceData {
   priceUsd: string;
@@ -51,25 +54,27 @@ async function fetchFromClanker(): Promise<string | null> {
 async function fetchFrom0x(): Promise<string | null> {
   try {
     const fbc = CONTRACT_ADDRESSES.fbc;
-    // Use sellAmount (1 USDC) to avoid underflow when FBC price is tiny
-    // Then convert: priceUsd = 1 / (buyAmountFbc)
-    const url = `${OX_PRICE_URL}?sellToken=${USDC_BASE}&buyToken=${fbc}&sellAmount=1000000`;
-    const res = await fetch(url, {
-      headers: {
-        'accept': 'application/json',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => null);
-    const buyAmount = data?.buyAmount; // in FBC base units (18 decimals)
-    if (!buyAmount) return null;
-    const buyAmountNum = Number(buyAmount);
-    if (!isFinite(buyAmountNum) || buyAmountNum <= 0) return null;
-    const fbcPerUsd = buyAmountNum / 1e18; // FBC you get for 1 USDC
-    if (!isFinite(fbcPerUsd) || fbcPerUsd <= 0) return null;
-    const usdPerFbc = 1 / fbcPerUsd;
-    return usdPerFbc.toString();
+    // Try both USDC variants; take the first successful response
+    for (const usdc of USDC_BASES) {
+      const url = `${OX_PRICE_URL}?sellToken=${usdc}&buyToken=${fbc}&sellAmount=1000000`;
+      const res = await fetch(url, {
+        headers: {
+          'accept': 'application/json',
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      const buyAmount = data?.buyAmount; // in FBC base units (18 decimals)
+      if (!buyAmount) continue;
+      const buyAmountNum = Number(buyAmount);
+      if (!isFinite(buyAmountNum) || buyAmountNum <= 0) continue;
+      const fbcPerUsd = buyAmountNum / 1e18; // FBC you get for 1 USDC
+      if (!isFinite(fbcPerUsd) || fbcPerUsd <= 0) continue;
+      const usdPerFbc = 1 / fbcPerUsd;
+      return usdPerFbc.toString();
+    }
+    return null;
   } catch (err) {
     console.error('0x price fetch error:', err);
     return null;

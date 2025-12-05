@@ -4,6 +4,7 @@ import { readContract, waitForTransactionReceipt } from 'viem/actions';
 import { base } from 'viem/chains';
 import { CONTRACT_ADDRESSES } from './constants';
 import { sendTx } from '@/lib/onchain/sendTx';
+const OX_QUOTE_URL = 'https://base.api.0x.org/swap/v1/quote';
 
 // ERC20 ABI for approve and transfer functions
 const ERC20_ABI = [
@@ -121,9 +122,42 @@ export async function payInFBC(
       args: [account],
     });
     if (balance < amountBigInt) {
-      const have = formatUnits(balance, 18);
-      const need = formatUnits(amountBigInt, 18);
-      throw new Error(`Insufficient FBC balance. You have ${have}, need ${need}.`);
+      // Attempt auto-swap from ETH → FBC for the missing amount via 0x on Base
+      const missing = amountBigInt - balance;
+      try {
+        const url = `${OX_QUOTE_URL}?sellToken=ETH&buyToken=${CONTRACT_ADDRESSES.fbc}&buyAmount=${missing}&takerAddress=${account}&slippagePercentage=0.02`;
+        const res = await fetch(url, { headers: { accept: 'application/json' } });
+        if (!res.ok) throw new Error(`0x quote failed (${res.status})`);
+        const q = await res.json();
+        const toAddr: `0x${string}` = q.to;
+        const data: `0x${string}` = q.data;
+        const value: bigint = BigInt(q.value || '0');
+
+        const swapHash = await walletClient.sendTransaction({
+          account,
+          to: toAddr,
+          data,
+          value,
+        });
+        await waitForTransactionReceipt(publicClient, { hash: swapHash });
+      } catch (swapErr) {
+        const have = formatUnits(balance, 18);
+        const need = formatUnits(amountBigInt, 18);
+        throw new Error(`Insufficient FBC balance. You have ${have}, need ${need}. Autoswap failed: ${(swapErr as Error).message}`);
+      }
+
+      // Re-check balance after swap
+      const newBal = await readContract(publicClient, {
+        address: CONTRACT_ADDRESSES.fbc,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [account],
+      });
+      if (newBal < amountBigInt) {
+        const have = formatUnits(newBal, 18);
+        const need = formatUnits(amountBigInt, 18);
+        throw new Error(`Swap did not acquire enough FBC. You have ${have}, need ${need}.`);
+      }
     }
 
     // Standardized: simulate → write → wait via wagmi actions
