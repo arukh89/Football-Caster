@@ -159,26 +159,23 @@ function usdPerFbcFromSqrt(
   fbcDecimals: number,
   usdcDecimals: number,
 ): string {
-  // priceRaw = (sqrtPriceX96^2) / 2^192 = token1/token0 in base units
-  const ratioX192 = (sqrtPriceX96 * sqrtPriceX96);
+  // price1Per0 (decimal-adjusted) = (sqrtPriceX96^2 / 2^192) * 10^(decimals1 - decimals0)
+  // We want USD/FBC.
+  const ratioX192 = sqrtPriceX96 * sqrtPriceX96;
   const q192 = 2n ** 192n;
-  const decDiff = fbcDecimals - usdcDecimals; // typically 12
-  const scale = decDiff >= 0 ? pow10(decDiff) : 1n;
-  const invScale = decDiff < 0 ? pow10(-decDiff) : 1n;
 
   if (token0.toLowerCase() === fbc.toLowerCase()) {
-    // token0 = FBC, token1 = USDC → P = USDC per FBC (decimalized)
-    // USD/FBC = (ratioX192 * 10^(d0-d1)) / 2^192
-    const numerator = ratioX192 * scale;
-    const denominator = q192 * invScale;
+    // token0 = FBC (d0=fbc), token1 = USDC (d1=usdc)
+    // USD/FBC = ratioX192 / q192 * 10^(usdc - fbc)
+    const numerator = ratioX192 * pow10(usdcDecimals);
+    const denominator = q192 * pow10(fbcDecimals);
     return divToDecimalString(numerator, denominator, 12);
   } else {
-    // token0 = USDC, token1 = FBC → P = FBC per USDC → USD/FBC = 1/P
-    // Here d0-d1 = usdcDecimals - fbcDecimals = (-(fbcDecimals - usdcDecimals))
-    // USD/FBC = (2^192) / (ratioX192 * 10^(usdcDecimals - fbcDecimals))
-    // Using decDiff = fbcDecimals - usdcDecimals → 10^(usdc - fbc) = invScale
-    const numerator = q192;
-    const denominator = ratioX192 * invScale;
+    // token0 = USDC (d0=usdc), token1 = FBC (d1=fbc)
+    // FBC/USDC = ratioX192 / q192 * 10^(fbc - usdc)
+    // USD/FBC = 1 / (FBC/USDC) = q192 / ratioX192 * 10^(usdc - fbc)
+    const numerator = q192 * pow10(usdcDecimals);
+    const denominator = ratioX192 * pow10(fbcDecimals);
     return divToDecimalString(numerator, denominator, 12);
   }
 }
@@ -217,26 +214,30 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
       if (!pool) continue;
       const state = await readPoolState(pool);
       if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) continue;
-      const [t0, _t1] = sortTokens(usdc, WETH_BASE);
-      const [usdcDec, wethDec] = await Promise.all([
-        getTokenDecimals(usdc),
-        getTokenDecimals(WETH_BASE),
+      const [t0, t1] = sortTokens(usdc, WETH_BASE);
+      const [dec0, dec1] = await Promise.all([
+        getTokenDecimals(t0),
+        getTokenDecimals(t1),
       ]);
-      // Compute USDC per WETH
-      // If token0 = WETH, P = USDC per WETH; else invert
-      const ratioX192 = (state.sqrtPriceX96 * state.sqrtPriceX96);
+      // price1Per0 = t1 per t0; we want USD/WETH
+      const ratioX192 = state.sqrtPriceX96 * state.sqrtPriceX96;
       const q192 = 2n ** 192n;
-      const decDiff = wethDec - usdcDec;
-      const scale = decDiff >= 0 ? pow10(decDiff) : 1n;
-      const invScale = decDiff < 0 ? pow10(-decDiff) : 1n;
+      const factorNum = pow10(dec1); // 10^decimals(token1)
+      const factorDen = pow10(dec0); // 10^decimals(token0)
+      const price1Per0 = divToDecimalString(ratioX192 * factorNum, q192 * factorDen, 12);
       let val: string;
       if (t0.toLowerCase() === WETH_BASE.toLowerCase()) {
-        // token0=WETH → USDC/WETH = (ratio * 10^(d0-d1)) / 2^192
-        val = divToDecimalString(ratioX192 * scale, q192 * invScale, 12);
+        // t0=WETH, t1=USDC => price1Per0 = USD/WETH already
+        val = price1Per0;
       } else {
-        // token0=USDC → WETH/USDC → invert
-        // USDC/WETH = 1 / (WETH/USDC) = (2^192) / (ratio * 10^(usdc - weth))
-        val = divToDecimalString(q192, ratioX192 * invScale, 12);
+        // t0=USDC, t1=WETH => price1Per0 = WETH/USDC; invert to USD/WETH
+        // USD/WETH = 1 / (WETH/USDC)
+        const [i, f = ''] = price1Per0.split('.');
+        const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+        const invScaled = (10n ** 12n * 10n ** 12n) / scaled; // 1 / x with 12 precision
+        const intPart = invScaled / (10n ** 12n);
+        const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+        val = frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
       }
       usdPerWeth = val;
       break;
@@ -251,26 +252,29 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
       if (!pool) continue;
       const state = await readPoolState(pool);
       if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) continue;
-      const [t0, _t1] = sortTokens(WETH_BASE, fbc);
-      const [wethDec, fbcDec] = await Promise.all([
-        getTokenDecimals(WETH_BASE),
-        getTokenDecimals(fbc),
+      const [t0, t1] = sortTokens(WETH_BASE, fbc);
+      const [dec0, dec1] = await Promise.all([
+        getTokenDecimals(t0),
+        getTokenDecimals(t1),
       ]);
-      // Compute WETH per FBC
-      const ratioX192 = (state.sqrtPriceX96 * state.sqrtPriceX96);
+      // price1Per0 = t1 per t0
+      const ratioX192 = state.sqrtPriceX96 * state.sqrtPriceX96;
       const q192 = 2n ** 192n;
-      const decDiff = fbcDec - wethDec;
-      const scale = decDiff >= 0 ? pow10(decDiff) : 1n;
-      const invScale = decDiff < 0 ? pow10(-decDiff) : 1n;
+      const factorNum = pow10(dec1);
+      const factorDen = pow10(dec0);
+      const price1Per0 = divToDecimalString(ratioX192 * factorNum, q192 * factorDen, 12);
       let val: string;
       if (t0.toLowerCase() === fbc.toLowerCase()) {
-        // token0=FBC → WETH per FBC = (ratio * 10^(d0-d1)) / 2^192
-        val = divToDecimalString(ratioX192 * scale, q192 * invScale, 12);
+        // t0=FBC, t1=WETH => price1Per0 = WETH per FBC (wanted)
+        val = price1Per0;
       } else {
-        // token0=WETH → FBC per WETH → invert to WETH/FBC
-        // WETH/FBC = 1 / (FBC/WETH) = (2^192) / (ratio * 10^(weth - fbc))
-        // Here decDiff = fbc - weth → (weth - fbc) uses invScale
-        val = divToDecimalString(q192, ratioX192 * invScale, 12);
+        // t0=WETH, t1=FBC => price1Per0 = FBC per WETH; invert to WETH/FBC
+        const [i, f = ''] = price1Per0.split('.');
+        const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+        const invScaled = (10n ** 12n * 10n ** 12n) / scaled;
+        const intPart = invScaled / (10n ** 12n);
+        const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+        val = frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
       }
       wethPerFbc = val;
       break;
