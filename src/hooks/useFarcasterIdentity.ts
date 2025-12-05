@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { quickAuth } from '@farcaster/miniapp-sdk';
 import type { FarcasterIdentity } from '@/lib/types';
+import { DEV_FID } from '@/lib/constants';
 import { useIsInFarcaster } from '@/hooks/useIsInFarcaster';
 
 /**
@@ -32,8 +33,14 @@ export function useFarcasterIdentity(): {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (mounted) {
-          const ident: FarcasterIdentity = { fid: Number(data.fid) };
-          setIdentity(ident);
+          const fidNum = Number(data.fid);
+          // In web mode, ignore dev fallback responses
+          if (!isInFarcaster && (data.wallet === '0xdev' || fidNum === DEV_FID)) {
+            setIdentity(null);
+          } else {
+            const ident: FarcasterIdentity = { fid: fidNum };
+            setIdentity(ident);
+          }
           setIsLoading(false);
         }
       } catch (err) {

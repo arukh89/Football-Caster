@@ -1,20 +1,588 @@
 /**
  * Pricing Service - FBC/USD price fetching
- * Primary: Clanker, Fallback: Dexscreener
+ * Sources priority: 0x/Matcha → Custom URL → Dexscreener → Clanker
  */
 
+import { CONTRACT_ADDRESSES, CHAIN_CONFIG } from '@/lib/constants';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
 
 const CLANKER_URL = 'https://www.clanker.world/clanker/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
+const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || process.env.PRICE_URL || '';
+const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
+// Optional manual override for local/dev: set any of these envs to a positive number
+const PRICE_OVERRIDE_ENV =
+  process.env.NEXT_PUBLIC_FBC_PRICE_USD ||
+  process.env.NEXT_PUBLIC_PRICE_OVERRIDE ||
+  process.env.FBC_PRICE_USD ||
+  process.env.PRICE_OVERRIDE_USD ||
+  process.env.PRICE_OVERRIDE;
+// USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
+const USDC_DEFAULTS: `0x${string}`[] = [
+  '0x833589fcd6edb6e08f4c7c76f99918fcae4f2de0',
+];
+const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || process.env.USDC_ADDRESSES || '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
+const USDC_BASES: `0x${string}`[] = Array.from(new Set([...USDC_DEFAULTS, ...USDC_ENV]));
+const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
+// Uniswap V3 Factory on Base (per official deployments)
+const UNISWAP_V3_FACTORY: `0x${string}` = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
+const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
+
+// Uniswap V4 PoolManager (Base) – configurable via env
+const UNISWAP_V4_POOL_MANAGER: `0x${string}` = (
+  (process.env.NEXT_PUBLIC_UNISWAP_V4_POOL_MANAGER || process.env.UNISWAP_V4_POOL_MANAGER || '0x498581fF718922c3f8e6A244956aF099B2652b2b')
+) as `0x${string}`;
+// Optional known PoolId (bytes32) for FBC/WETH on v4
+const UNISWAP_V4_FBC_WETH_POOL_ID: `0x${string}` | null = (() => {
+  const s = process.env.NEXT_PUBLIC_UNISWAP_V4_FBC_WETH_POOL_ID || process.env.UNISWAP_V4_FBC_WETH_POOL_ID || '';
+  return /^0x[a-fA-F0-9]{64}$/.test(s.trim()) ? (s.trim() as `0x${string}`) : null;
+})();
 
 interface PriceData {
   priceUsd: string;
-  source: 'clanker' | 'dexscreener';
+  source: 'clanker' | 'dexscreener' | 'custom' | '0x' | 'override' | 'uniswap_v3' | 'uniswap_v4';
   timestamp: number;
 }
 
 let cachedPrice: PriceData | null = null;
 const CACHE_TTL = 30 * 1000; // 30 seconds
+
+// lightweight ERC20 decimals ABI
+const ERC20_DECIMALS_ABI = [
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+];
+
+const publicClient = createPublicClient({ chain: base, transport: http(CHAIN_CONFIG.rpcUrl) });
+
+async function getTokenDecimals(addr: `0x${string}`): Promise<number> {
+  try {
+    const dec = await publicClient.readContract({
+      address: addr,
+      abi: ERC20_DECIMALS_ABI as any,
+      functionName: 'decimals',
+      args: [],
+    });
+    return Number(dec) || 18;
+  } catch {
+    return 18;
+  }
+}
+
+// Convert a BigInt and decimals to a decimal string without losing precision
+function formatUnitsString(value: bigint, decimals: number): string {
+  const neg = value < 0n;
+  const v = neg ? -value : value;
+  const base = 10n ** BigInt(decimals);
+  const integer = v / base;
+  const fraction = v % base;
+  if (fraction === 0n) return `${neg ? '-' : ''}${integer.toString()}`;
+  // pad fraction to length "decimals"
+  const fracStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return `${neg ? '-' : ''}${integer.toString()}.${fracStr}`;
+}
+
+// Compute (numerator / denominator) as decimal string with given precision
+function divToDecimalString(numerator: bigint, denominator: bigint, precision = 18): string {
+  if (denominator === 0n) return '0';
+  const scale = 10n ** BigInt(precision);
+  const scaled = (numerator * scale) / denominator; // floor division
+  const intPart = scaled / scale;
+  const fracPart = (scaled % scale).toString().padStart(precision, '0').replace(/0+$/, '');
+  return fracPart.length ? `${intPart.toString()}.${fracPart}` : intPart.toString();
+}
+
+// Minimal ABIs for Uniswap V3
+const UNISWAP_V3_FACTORY_ABI = [
+  {
+    name: 'getPool',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+    ],
+    outputs: [{ name: 'pool', type: 'address' }],
+  },
+] as const;
+
+const UNISWAP_V3_POOL_ABI = [
+  {
+    name: 'slot0',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'sqrtPriceX96', type: 'uint160' },
+      { name: 'tick', type: 'int24' },
+      { name: 'observationIndex', type: 'uint16' },
+      { name: 'observationCardinality', type: 'uint16' },
+      { name: 'observationCardinalityNext', type: 'uint16' },
+      { name: 'feeProtocol', type: 'uint8' },
+      { name: 'unlocked', type: 'bool' },
+    ],
+  },
+  {
+    name: 'liquidity',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint128' }],
+  },
+  {
+    name: 'observe',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [ { name: 'secondsAgos', type: 'uint32[]' } ],
+    outputs: [
+      { name: 'tickCumulatives', type: 'int56[]' },
+      { name: 'secondsPerLiquidityCumulativeX128', type: 'uint160[]' },
+    ],
+  },
+] as const;
+
+function sortTokens(a: `0x${string}`, b: `0x${string}`): [`0x${string}`, `0x${string}`] {
+  return a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
+}
+
+async function getPoolAddress(tokenA: `0x${string}`, tokenB: `0x${string}`, fee: number): Promise<`0x${string}` | null> {
+  const [t0, t1] = sortTokens(tokenA, tokenB);
+  const pool = await publicClient.readContract({
+    address: UNISWAP_V3_FACTORY,
+    abi: UNISWAP_V3_FACTORY_ABI as any,
+    functionName: 'getPool',
+    args: [t0, t1, fee],
+  });
+  const addr = (pool as string).toLowerCase();
+  if (addr === '0x0000000000000000000000000000000000000000') return null;
+  return pool as `0x${string}`;
+}
+
+async function readPoolState(pool: `0x${string}`): Promise<{ sqrtPriceX96: bigint; liquidity: bigint } | null> {
+  try {
+    const [slot0, liquidity] = await Promise.all([
+      publicClient.readContract({ address: pool, abi: UNISWAP_V3_POOL_ABI as any, functionName: 'slot0', args: [] }) as Promise<any>,
+      publicClient.readContract({ address: pool, abi: UNISWAP_V3_POOL_ABI as any, functionName: 'liquidity', args: [] }) as Promise<bigint>,
+    ]);
+    const sqrtPriceX96 = BigInt(slot0?.[0] ?? slot0?.sqrtPriceX96 ?? 0);
+    return { sqrtPriceX96, liquidity: BigInt(liquidity) };
+  } catch {
+    return null;
+  }
+}
+
+function pow10(n: number): bigint { return 10n ** BigInt(n); }
+
+function usdPerFbcFromSqrt(
+  fbc: `0x${string}`,
+  usdc: `0x${string}`,
+  token0: `0x${string}`,
+  sqrtPriceX96: bigint,
+  fbcDecimals: number,
+  usdcDecimals: number,
+): string {
+  // price1Per0 (decimal-adjusted) = (sqrtPriceX96^2 / 2^192) * 10^(decimals1 - decimals0)
+  // We want USD/FBC.
+  const ratioX192 = sqrtPriceX96 * sqrtPriceX96;
+  const q192 = 2n ** 192n;
+
+  if (token0.toLowerCase() === fbc.toLowerCase()) {
+    // token0 = FBC (d0=fbc), token1 = USDC (d1=usdc)
+    // Correct decimal factor uses 10^(d0 - d1) => 10^(fbc - usdc)
+    // USD/FBC = (ratioX192 / q192) * 10^(fbc - usdc)
+    const numerator = ratioX192 * pow10(fbcDecimals);
+    const denominator = q192 * pow10(usdcDecimals);
+    return divToDecimalString(numerator, denominator, 12);
+  } else {
+    // token0 = USDC (d0=usdc), token1 = FBC (d1=fbc)
+    // FBC/USDC = (ratioX192 / q192) * 10^(usdc - fbc)  [since 10^(d0 - d1)]
+    // USD/FBC = 1 / (FBC/USDC) = (q192 * 10^fbc) / (ratioX192 * 10^usdc)
+    const numerator = q192 * pow10(fbcDecimals);
+    const denominator = ratioX192 * pow10(usdcDecimals);
+    return divToDecimalString(numerator, denominator, 12);
+  }
+}
+
+async function quoteUsdPerFbcFromPool(tokenA: `0x${string}`, tokenB: `0x${string}`, fee: number): Promise<string | null> {
+  const pool = await getPoolAddress(tokenA, tokenB, fee);
+  if (!pool) return null;
+  const state = await readPoolState(pool);
+  if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) return null;
+  const [t0, t1] = sortTokens(tokenA, tokenB);
+  const fbc = CONTRACT_ADDRESSES.fbc;
+  const usdc = USDC_BASES[0];
+  const [fbcDec, usdcDec] = await Promise.all([
+    getTokenDecimals(fbc),
+    getTokenDecimals(usdc),
+  ]);
+  return usdPerFbcFromSqrt(fbc, usdc, t0, state.sqrtPriceX96, fbcDec, usdcDec);
+}
+
+async function fetchFromUniswapV3Onchain(): Promise<string | null> {
+  try {
+    const fbc = CONTRACT_ADDRESSES.fbc;
+    const usdc = USDC_BASES[0];
+
+    // 1) Try direct USDC-FBC pools across common fee tiers
+    for (const fee of V3_FEE_TIERS) {
+      const price = await quoteUsdPerFbcFromPool(usdc, fbc, fee);
+      if (price) return price;
+    }
+
+    // 2) Try via WETH: USD/WETH * WETH/FBC
+    // USDC-WETH
+    let usdPerWeth: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(usdc, WETH_BASE, fee);
+      if (!pool) continue;
+      const state = await readPoolState(pool);
+      if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) continue;
+      const [t0, t1] = sortTokens(usdc, WETH_BASE);
+      const [dec0, dec1] = await Promise.all([
+        getTokenDecimals(t0),
+        getTokenDecimals(t1),
+      ]);
+      // price1Per0 = t1 per t0; we want USD/WETH
+      const ratioX192 = state.sqrtPriceX96 * state.sqrtPriceX96;
+      const q192 = 2n ** 192n;
+      // Decimal normalization: 10^(dec0 - dec1)
+      const factorNum = pow10(dec0); // token0 decimals
+      const factorDen = pow10(dec1); // token1 decimals
+      const price1Per0 = divToDecimalString(ratioX192 * factorNum, q192 * factorDen, 12);
+      let val: string;
+      if (t0.toLowerCase() === WETH_BASE.toLowerCase()) {
+        // t0=WETH, t1=USDC => price1Per0 = USD/WETH already
+        val = price1Per0;
+      } else {
+        // t0=USDC, t1=WETH => price1Per0 = WETH/USDC; invert to USD/WETH
+        // USD/WETH = 1 / (WETH/USDC)
+        const [i, f = ''] = price1Per0.split('.');
+        const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+        const invScaled = (10n ** 12n * 10n ** 12n) / scaled; // 1 / x with 12 precision
+        const intPart = invScaled / (10n ** 12n);
+        const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+        val = frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+      }
+      usdPerWeth = val;
+      break;
+    }
+
+    if (!usdPerWeth) return null;
+
+    // WETH-FBC
+    let wethPerFbc: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(WETH_BASE, fbc, fee);
+      if (!pool) continue;
+      const state = await readPoolState(pool);
+      if (!state || state.liquidity <= 0n || state.sqrtPriceX96 === 0n) continue;
+      const [t0, t1] = sortTokens(WETH_BASE, fbc);
+      const [dec0, dec1] = await Promise.all([
+        getTokenDecimals(t0),
+        getTokenDecimals(t1),
+      ]);
+      // price1Per0 = t1 per t0
+      const ratioX192 = state.sqrtPriceX96 * state.sqrtPriceX96;
+      const q192 = 2n ** 192n;
+      // Decimal normalization: 10^(dec0 - dec1)
+      const factorNum = pow10(dec0);
+      const factorDen = pow10(dec1);
+      const price1Per0 = divToDecimalString(ratioX192 * factorNum, q192 * factorDen, 12);
+      let val: string;
+      if (t0.toLowerCase() === fbc.toLowerCase()) {
+        // t0=FBC, t1=WETH => price1Per0 = WETH per FBC (wanted)
+        val = price1Per0;
+      } else {
+        // t0=WETH, t1=FBC => price1Per0 = FBC per WETH; invert to WETH/FBC
+        const [i, f = ''] = price1Per0.split('.');
+        const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+        const invScaled = (10n ** 12n * 10n ** 12n) / scaled;
+        const intPart = invScaled / (10n ** 12n);
+        const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+        val = frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+      }
+      wethPerFbc = val;
+      break;
+    }
+
+    if (!wethPerFbc) return null;
+
+    // USD/FBC = (USD/WETH) * (WETH/FBC)
+    // Multiply two decimal strings precisely via BigInt with 12+12 precision
+    const toScaled = (s: string) => {
+      const [i, f = ''] = s.split('.');
+      return BigInt(i + (f + '000000000000').slice(0, 12));
+    };
+    const usdPerWethScaled = toScaled(usdPerWeth);
+    const wethPerFbcScaled = toScaled(wethPerFbc);
+    const productScaled = (usdPerWethScaled * wethPerFbcScaled) / (10n ** 12n);
+    const intPart = productScaled / (10n ** 12n);
+    const frac = (productScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+    return frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+  } catch (e) {
+    console.error('Uniswap v3 on-chain price error:', e);
+    return null;
+  }
+}
+
+const TWAP_SECONDS: number = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_TWAP_SECONDS || process.env.TWAP_SECONDS || '600');
+  if (!isFinite(raw) || raw <= 0) return 600;
+  return Math.min(Math.max(Math.floor(raw), 60), 3600); // clamp 1m..60m
+})();
+
+function pow1p0001(tick: number): number {
+  // price1Per0 = 1.0001^tick
+  // Use JS double precision; sufficient for quoting display purposes.
+  return Math.pow(1.0001, tick);
+}
+
+function usdPerFbcFromAvgTick(
+  fbc: `0x${string}`,
+  usdc: `0x${string}`,
+  token0: `0x${string}`,
+  avgTick: number,
+  fbcDecimals: number,
+  usdcDecimals: number,
+): string {
+  const price1Per0 = pow1p0001(avgTick); // token1 per token0 (raw units)
+  if (token0.toLowerCase() === fbc.toLowerCase()) {
+    // token0=FBC, token1=USDC → USD/FBC = price1Per0 * 10^(dec0-dec1)
+    const factor = Math.pow(10, fbcDecimals - usdcDecimals);
+    return String(price1Per0 * factor);
+  } else {
+    // token0=USDC, token1=FBC → we have FBC/USDC, invert and apply 10^(dec0-dec1)
+    const factor = Math.pow(10, usdcDecimals - fbcDecimals);
+    const inv = 1 / price1Per0;
+    return String(inv * factor);
+  }
+}
+
+async function observeAvgTick(pool: `0x${string}`, seconds: number): Promise<number | null> {
+  try {
+    const res: any = await publicClient.readContract({
+      address: pool,
+      abi: UNISWAP_V3_POOL_ABI as any,
+      functionName: 'observe',
+      args: [[seconds, 0]],
+    });
+    const ticks: any[] = res?.[0] ?? res?.tickCumulatives;
+    if (!ticks || ticks.length < 2) return null;
+    const t0 = BigInt(ticks[0]);
+    const t1 = BigInt(ticks[1]);
+    const delta = t1 - t0;
+    // integer division toward zero; sufficient
+    const avg = Number(delta / BigInt(seconds));
+    return avg;
+  } catch {
+    return null;
+  }
+}
+
+async function quoteUsdPerFbcFromPoolTwap(tokenA: `0x${string}`, tokenB: `0x${string}`, fee: number, seconds = TWAP_SECONDS): Promise<string | null> {
+  const pool = await getPoolAddress(tokenA, tokenB, fee);
+  if (!pool) return null;
+  const avgTick = await observeAvgTick(pool, seconds);
+  if (avgTick === null) return null;
+  const [t0, t1] = sortTokens(tokenA, tokenB);
+  const fbc = CONTRACT_ADDRESSES.fbc;
+  const usdc = USDC_BASES[0];
+  const [fbcDec, usdcDec] = await Promise.all([
+    getTokenDecimals(fbc),
+    getTokenDecimals(usdc),
+  ]);
+  return usdPerFbcFromAvgTick(fbc, usdc, t0, avgTick, fbcDec, usdcDec);
+}
+
+async function fetchFromUniswapV3Twap(): Promise<string | null> {
+  try {
+    const fbc = CONTRACT_ADDRESSES.fbc;
+    const usdc = USDC_BASES[0];
+
+    // 1) Try direct USDC-FBC pools across fee tiers using TWAP
+    for (const fee of V3_FEE_TIERS) {
+      const price = await quoteUsdPerFbcFromPoolTwap(usdc, fbc, fee, TWAP_SECONDS);
+      if (price) return price;
+    }
+
+    // 2) TWAP multi-hop via WETH: USD/WETH (USDC-WETH) * WETH/FBC (WETH-FBC)
+    let usdPerWeth: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(usdc, WETH_BASE, fee);
+      if (!pool) continue;
+      const avgTick = await observeAvgTick(pool, TWAP_SECONDS);
+      if (avgTick === null) continue;
+      const [t0, t1] = sortTokens(usdc, WETH_BASE);
+      const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
+      // price1Per0 from tick; want USD/WETH
+      const p = usdPerFbcFromAvgTick(t0 as any, t1 as any, t0, avgTick, dec0, dec1); // reusing fn signature
+      usdPerWeth = p;
+      break;
+    }
+    if (!usdPerWeth) return null;
+
+    let wethPerFbc: string | null = null;
+    for (const fee of V3_FEE_TIERS) {
+      const pool = await getPoolAddress(WETH_BASE, fbc, fee);
+      if (!pool) continue;
+      const avgTick = await observeAvgTick(pool, TWAP_SECONDS);
+      if (avgTick === null) continue;
+      const [t0, t1] = sortTokens(WETH_BASE, fbc);
+      const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
+      // price1Per0 from tick; want WETH/FBC
+      const p = usdPerFbcFromAvgTick(t0 as any, t1 as any, t0, avgTick, dec0, dec1);
+      wethPerFbc = p;
+      break;
+    }
+    if (!wethPerFbc) return null;
+
+    // Multiply decimals as numbers; convert to string
+    const toNum = (s: string) => {
+      const n = Number(s);
+      return isFinite(n) ? n : 0;
+    };
+    const out = toNum(usdPerWeth) * toNum(wethPerFbc);
+    if (!isFinite(out) || out <= 0) return null;
+    return String(out);
+  } catch (e) {
+    console.error('Uniswap v3 TWAP price error:', e);
+    return null;
+  }
+}
+
+// ---------------------------
+// Uniswap v4 (event-based TWAP)
+// ---------------------------
+// Minimal Swap event ABI for decoding sqrtPriceX96
+const UNISWAP_V4_SWAP_EVENT = {
+  name: 'Swap',
+  type: 'event',
+  inputs: [
+    { name: 'id', type: 'bytes32', indexed: true },
+    { name: 'sender', type: 'address', indexed: false },
+    { name: 'recipient', type: 'address', indexed: false },
+    { name: 'amount0', type: 'int256', indexed: false },
+    { name: 'amount1', type: 'int256', indexed: false },
+    { name: 'sqrtPriceX96', type: 'uint160', indexed: false },
+    { name: 'tick', type: 'int24', indexed: false },
+  ],
+} as const;
+
+function price1Per0FromSqrt(token0: `0x${string}`, token1: `0x${string}`, sqrtPriceX96: bigint, dec0: number, dec1: number): string {
+  const ratioX192 = sqrtPriceX96 * sqrtPriceX96;
+  const q192 = 2n ** 192n;
+  return divToDecimalString(ratioX192 * pow10(dec0), q192 * pow10(dec1), 12);
+}
+
+async function usdPerWethFromV3Twap(seconds = TWAP_SECONDS): Promise<string | null> {
+  const usdc = USDC_BASES[0];
+  for (const fee of V3_FEE_TIERS) {
+    const pool = await getPoolAddress(usdc, WETH_BASE, fee);
+    if (!pool) continue;
+    const avgTick = await observeAvgTick(pool, seconds);
+    if (avgTick === null) continue;
+    const [t0, t1] = sortTokens(usdc, WETH_BASE);
+    const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
+    const p = usdPerFbcFromAvgTick(t0 as any, t1 as any, t0, avgTick, dec0, dec1);
+    if (t0.toLowerCase() === WETH_BASE.toLowerCase()) {
+      // t0=WETH, p = USD/WETH already
+      return p;
+    }
+    // t0=USDC -> p = WETH/USDC; invert to USD/WETH
+    const [i, f = ''] = p.split('.');
+    const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+    const invScaled = (10n ** 12n * 10n ** 12n) / scaled;
+    const intPart = invScaled / (10n ** 12n);
+    const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+    return frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+  }
+  return null;
+}
+
+// Optional lookback override for v4 TWAP (in blocks)
+const V4_TWAP_LOOKBACK_BLOCKS: number = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_V4_TWAP_LOOKBACK_BLOCKS || process.env.V4_TWAP_LOOKBACK_BLOCKS || '');
+  if (!isFinite(raw) || raw <= 0) return 20000; // sensible default window on Base
+  return Math.min(Math.max(Math.floor(raw), 500), 200000);
+})();
+
+async function fetchWethPerFbcFromV4PoolId(poolId: `0x${string}`): Promise<string | null> {
+  try {
+    const latest = (await publicClient.getBlock()).number!;
+    const approxBlocks = BigInt(V4_TWAP_LOOKBACK_BLOCKS);
+    const fromBlock = latest > approxBlocks ? latest - approxBlocks : 0n;
+    const logs = await publicClient.getLogs({
+      address: UNISWAP_V4_POOL_MANAGER,
+      event: UNISWAP_V4_SWAP_EVENT as any,
+      args: { id: poolId },
+      fromBlock,
+      toBlock: latest,
+    });
+    if (!logs.length) return null;
+
+    const fbc = CONTRACT_ADDRESSES.fbc;
+    const [t0, t1] = sortTokens(fbc, WETH_BASE);
+    const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
+
+    const last = logs.slice(-10);
+    let sumScaled = 0n;
+    let count = 0n;
+    for (const ev of last) {
+      const sqrt = (ev as any)?.args?.sqrtPriceX96 as bigint | undefined;
+      if (!sqrt || sqrt === 0n) continue;
+      const p = price1Per0FromSqrt(t0, t1, sqrt, dec0, dec1);
+      const [i, f = ''] = p.split('.');
+      const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+      sumScaled += scaled;
+      count += 1n;
+    }
+    if (count === 0n) return null;
+    const avgScaled = sumScaled / count; // token1 per token0
+
+    let outScaled: bigint;
+    if (t0.toLowerCase() === fbc.toLowerCase()) {
+      // token0=FBC, token1=WETH → WETH/FBC
+      outScaled = avgScaled;
+    } else {
+      // token0=WETH, token1=FBC → invert to WETH/FBC
+      outScaled = (10n ** 12n * 10n ** 12n) / avgScaled;
+    }
+    const intPart = outScaled / (10n ** 12n);
+    const frac = (outScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+    return frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+  } catch (e) {
+    console.error('Uniswap v4 fetch error:', e);
+    return null;
+  }
+}
+
+async function fetchFromUniswapV4Twap(): Promise<string | null> {
+  if (!UNISWAP_V4_FBC_WETH_POOL_ID) return null;
+  const wethPerFbc = await fetchWethPerFbcFromV4PoolId(UNISWAP_V4_FBC_WETH_POOL_ID);
+  if (!wethPerFbc) return null;
+  const usdPerWeth = await usdPerWethFromV3Twap();
+  if (!usdPerWeth) return null;
+  const toScaled = (s: string) => {
+    const [i, f = ''] = s.split('.');
+    return BigInt(i + (f + '000000000000').slice(0, 12));
+  };
+  const usdPerWethScaled = toScaled(usdPerWeth);
+  const wethPerFbcScaled = toScaled(wethPerFbc);
+  const productScaled = (usdPerWethScaled * wethPerFbcScaled) / (10n ** 12n);
+  const intPart = productScaled / (10n ** 12n);
+  const frac = (productScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+  return frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+}
 
 /**
  * Fetch FBC price from Clanker
@@ -39,22 +607,117 @@ async function fetchFromClanker(): Promise<string | null> {
 }
 
 /**
+ * Fetch price via 0x (Matcha) aggregator on Base chain.
+ * We request a quote for buying exactly 1e18 wei of FBC with USDC and
+ * convert returned sellAmount (USDC in 6 decimals) to USD per 1 FBC.
+ */
+async function fetchFrom0x(): Promise<string | null> {
+  try {
+    const fbc = CONTRACT_ADDRESSES.fbc;
+    // Try both USDC variants; take the first successful response
+    for (const usdc of USDC_BASES) {
+      // Ask for price buying FBC with exactly 1 USDC (6 decimals)
+      const url = `${OX_PRICE_URL}?sellToken=${usdc}&buyToken=${fbc}&sellAmount=1000000`;
+      const res = await fetch(url, {
+        headers: {
+          'accept': 'application/json',
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      const buyAmountStr: string | undefined = data?.buyAmount; // in FBC base units (token decimals)
+      if (!buyAmountStr) continue;
+      let buyAmount: bigint;
+      try { buyAmount = BigInt(buyAmountStr); } catch { continue; }
+      if (buyAmount <= 0n) continue;
+      const fbcDecimals = await getTokenDecimals(CONTRACT_ADDRESSES.fbc);
+      // USD per FBC = 1 / (FBC per 1 USD)
+      // FBC per 1 USD = buyAmount / 10^fbcDecimals
+      // => USD/FBC = 10^fbcDecimals / buyAmount
+      const numerator = 10n ** BigInt(fbcDecimals);
+      const usdPerFbcStr = divToDecimalString(numerator, buyAmount, 12);
+      return usdPerFbcStr;
+    }
+    return null;
+  } catch (err) {
+    console.error('0x price fetch error:', err);
+    return null;
+  }
+}
+
+/**
  * Fetch FBC price from Dexscreener (fallback)
  */
 async function fetchFromDexscreener(): Promise<string | null> {
   try {
-    const response = await fetch(DEXSCREENER_URL);
+    const response = await fetch(DEXSCREENER_URL, {
+      headers: {
+        'accept': 'application/json',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
     if (!response.ok) return null;
 
     const data = await response.json();
-    const pair = data.pairs?.[0];
-    
-    if (pair?.priceUsd) {
-      return pair.priceUsd;
-    }
+    const pairs = (data.pairs || []) as any[];
+    // Prefer Base chain pairs with highest liquidity
+    const basePairs = pairs.filter((p) => (p?.chainId?.toString?.() === 'base' || /base/i.test(p?.chainId || '')) && p?.priceUsd);
+    const sorted = (basePairs.length ? basePairs : pairs)
+      .filter((p) => p?.priceUsd)
+      .sort((a, b) => (Number(b?.liquidity?.usd || 0) - Number(a?.liquidity?.usd || 0)));
+    const pair = sorted[0];
+    if (pair?.priceUsd) return String(pair.priceUsd);
     return null;
   } catch (error) {
     console.error('Dexscreener fetch error:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch FBC price from a custom endpoint if provided via env (NEXT_PUBLIC_PRICE_URL or PRICE_URL)
+ * Accepts JSON payloads like { priceUsd: "0.123" } or { price_usd: 0.123 }.
+ * Falls back to scanning text for a numeric USD value when JSON isn't available.
+ */
+async function fetchFromCustom(): Promise<string | null> {
+  if (!CUSTOM_PRICE_URL) return null;
+  try {
+    const response = await fetch(CUSTOM_PRICE_URL, {
+      headers: {
+        'accept': 'application/json,*/*',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    const text = await response.text();
+
+    // Try JSON first when possible (parse from text)
+    try {
+      const data = JSON.parse(text);
+      const candidates = [
+        (data as any).priceUsd,
+        (data as any).price_usd,
+        (data as any).price,
+        (data as any).usd,
+        (data as any)?.data?.priceUsd,
+        (data as any)?.data?.price_usd,
+      ];
+      for (const c of candidates) {
+        const v = typeof c === 'number' ? c : typeof c === 'string' ? parseFloat(c) : NaN;
+        if (!isNaN(v) && v > 0) return String(v);
+      }
+    } catch {}
+
+    // Fallback: attempt to parse numeric value from text
+    // Look for explicit priceUsd fields first within the raw text
+    let match = text.match(/priceUsd"?\s*[:=]\s*"?([0-9]+(?:\.[0-9]+)?)/i);
+    if (match?.[1]) return match[1];
+    // Generic $<number> pattern as a last resort
+    match = text.match(/\$\s*([0-9]+(?:\.[0-9]+)?)/);
+    if (match?.[1]) return match[1];
+    return null;
+  } catch (error) {
+    console.error('Custom price fetch error:', error);
     return null;
   }
 }
@@ -68,14 +731,59 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Try Clanker first
-  let priceUsd = await fetchFromClanker();
-  let source: 'clanker' | 'dexscreener' = 'clanker';
+  // If manual override provided, use it first (helps local/dev when token isn’t actively traded)
+  const override = (() => {
+    if (!PRICE_OVERRIDE_ENV) return null;
+    const v = parseFloat(String(PRICE_OVERRIDE_ENV));
+    return !isNaN(v) && v > 0 ? String(v) : null;
+  })();
+  if (override) {
+    cachedPrice = { priceUsd: override, source: 'override', timestamp: Date.now() };
+    return cachedPrice;
+  }
 
-  // Fallback to Dexscreener
+  // Prefer: Uniswap v4 TWAP → Uniswap v3 TWAP → Uniswap v3 instantaneous → 0x → Custom → Dexscreener → Clanker
+  let priceUsd: string | null = null;
+  let source: 'clanker' | 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' = 'dexscreener';
+
+  // Uniswap v4 TWAP (if PoolId configured)
+  priceUsd = await fetchFromUniswapV4Twap();
+  if (priceUsd) source = 'uniswap_v4';
+
+  // Uniswap v3 TWAP (direct or multi-hop)
+  if (!priceUsd) {
+    priceUsd = await fetchFromUniswapV3Twap();
+    if (priceUsd) source = 'uniswap_v3';
+  }
+
+  // 0x/Matcha (Base)
+  if (!priceUsd) {
+    priceUsd = await fetchFrom0x();
+    if (priceUsd) source = '0x';
+  }
+
+  // Custom URL
+  if (!priceUsd && CUSTOM_PRICE_URL) {
+    priceUsd = await fetchFromCustom();
+    if (priceUsd) source = 'custom';
+  }
+
+  // Dexscreener
   if (!priceUsd) {
     priceUsd = await fetchFromDexscreener();
-    source = 'dexscreener';
+    if (priceUsd) source = 'dexscreener';
+  }
+
+  // Uniswap v3 on-chain instantaneous (if TWAP unavailable)
+  if (!priceUsd) {
+    priceUsd = await fetchFromUniswapV3Onchain();
+    if (priceUsd) source = 'uniswap_v3';
+  }
+
+  // Fallback to Clanker
+  if (!priceUsd) {
+    priceUsd = await fetchFromClanker();
+    source = 'clanker';
   }
 
   if (!priceUsd) {
@@ -88,10 +796,13 @@ export async function getFBCPrice(): Promise<PriceData> {
     throw new Error('Invalid price data received');
   }
 
+  // Debug log for diagnostics
+  try { console.debug('[pricing] source=%s priceUsd=%s', source, priceUsd); } catch {}
+
   // Cache and return
   cachedPrice = {
     priceUsd,
-    source,
+    source: source as any,
     timestamp: Date.now(),
   };
 
@@ -103,21 +814,23 @@ export async function getFBCPrice(): Promise<PriceData> {
  * Uses integer math to avoid floating point errors
  */
 export function calculateFBCAmount(usdAmount: string, priceUsd: string): string {
-  const usd = parseFloat(usdAmount);
-  const price = parseFloat(priceUsd);
+  // Robust BigInt decimal math to avoid rounding to zero on tiny prices
+  const toScaled = (s: string, scale: number): bigint => {
+    const [i, f = ''] = String(s).trim().split('.');
+    const ii = (i || '0').replace(/[^0-9]/g, '');
+    const ff = f.replace(/[^0-9]/g, '');
+    const frac = (ff + '0'.repeat(scale)).slice(0, scale);
+    try { return BigInt(ii + frac); } catch { return 0n; }
+  };
 
-  if (isNaN(usd) || isNaN(price) || price <= 0) {
+  const usdScaled18 = toScaled(usdAmount, 18);     // usd * 1e18
+  const priceScaled18 = toScaled(priceUsd, 18);    // price * 1e18
+  if (usdScaled18 <= 0n || priceScaled18 <= 0n) {
     throw new Error('Invalid USD or price value');
   }
-
-  // Convert to wei: (usd / price) * 10^18
-  // Use BigInt for precision
-  // Convert to FBC with 18 decimals in wei:
-  // (usd / price) * 10^18
-  const usdWei = BigInt(Math.round(usd * 1e6)) * BigInt(1e12); // avoid float overflow
-  const priceWei = BigInt(Math.round(price * 1e6)) * BigInt(1e12);
-  const amountWei = usdWei * BigInt(1e18) / priceWei;
-
+  // amountWei = (usd * 1e18) / price
+  // Using scaled ints: (usdScaled18 * 1e18) / priceScaled18
+  const amountWei = (usdScaled18 * (10n ** 18n)) / priceScaled18;
   return amountWei.toString();
 }
 

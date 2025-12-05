@@ -34,26 +34,16 @@ function generateStarterPack(): Array<{ itemId: string; itemType: string; rating
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
   try {
-    const body = await req.json();
-    const validation = validate(verifyStarterSchema, body);
-
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
-    }
-
-    const { txHash } = validation.data;
+    const rawBody = await req.json().catch(() => ({}));
     const { fid, wallet } = ctx;
     const already = await stHasClaimedStarter(fid);
     if (already) return NextResponse.json({ error: 'Starter already claimed' }, { status: 409 });
 
-    // Check for transaction replay attack
-    const txUsed = await stIsTxUsed(txHash);
-    if (txUsed) {
-      return NextResponse.json({ error: 'Transaction hash already used' }, { status: 409 });
-    }
-
-    // Dev FID bypass
-    if (isDevFID(fid)) {
+    // Admin/Dev bypass (no payment required):
+    // - Dev FID
+    // - Admin wallet (treasury address)
+    const isAdminWallet = (wallet || '').toLowerCase() === TREASURY_ADDRESS.toLowerCase();
+    if (isDevFID(fid) || isAdminWallet) {
       const pack = generateStarterPack();
       await stGrantStarterPack(fid, pack.map((p) => ({
         player_id: p.itemId,
@@ -61,7 +51,20 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         position: null,
         rating: p.rating,
       })));
-      return NextResponse.json({ success: true, pack, devBypass: true });
+      return NextResponse.json({ success: true, pack, bypass: true });
+    }
+
+    // For non-bypass path, validate request body
+    const validation = validate(verifyStarterSchema, rawBody);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+    const { txHash } = validation.data;
+
+    // Check for transaction replay attack
+    const txUsed = await stIsTxUsed(txHash);
+    if (txUsed) {
+      return NextResponse.json({ error: 'Transaction hash already used' }, { status: 409 });
     }
 
     // Verify payment

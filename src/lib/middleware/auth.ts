@@ -55,13 +55,13 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
       }
       return { fid, wallet };
     } catch (error) {
-      // In development, accept token as plain fid:wallet
-      if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_FALLBACK === 'true') {
+      // Only allow explicit dev fallback when enabled
+      if (process.env.ENABLE_DEV_FALLBACK === 'true') {
         const [fidStr, wallet] = token.split(':');
         const fidNum = parseInt(fidStr || '', 10);
         if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
       }
-      // In production, JWT verification failure means unauthorized
+      // Otherwise unauthorized
       console.error('JWT verification failed:', error);
       return null;
     }
@@ -72,8 +72,8 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
     return null;
   }
   
-  // Dev fallback - only in development or with explicit flag
-  if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_FALLBACK === 'true') {
+  // Dev fallback - only with explicit flag
+  if (process.env.ENABLE_DEV_FALLBACK === 'true') {
     const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
     if (Number.isFinite(devFid)) {
       console.warn('Using dev fallback FID:', devFid);

@@ -8,14 +8,15 @@ import { quickAuth } from "@farcaster/miniapp-sdk";
 import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
 import { useWallet } from "@/hooks/useWallet";
 import { payInFBC, formatFBC } from "@/lib/wallet-utils";
-import { CONTRACT_ADDRESSES } from "@/lib/constants";
+import { CONTRACT_ADDRESSES, DEV_FID } from "@/lib/constants";
+import { useFarcasterIdentity } from "@/hooks/useFarcasterIdentity";
 import { createWalletClient, http, createPublicClient } from "viem";
 import { base } from "viem/chains";
 
 interface QuoteResponse {
-  priceWei: string;
-  priceUSD: number;
-  expiresAt: number;
+  amountWei: string;
+  priceUsd: string;
+  usdAmount?: string;
 }
 
 export function StarterPackCard(): JSX.Element | null {
@@ -35,8 +36,11 @@ export function StarterPackCard(): JSX.Element | null {
   const [quote, setQuote] = React.useState<QuoteResponse | null>(null);
   const [step, setStep] = React.useState<'idle' | 'quote' | 'payment' | 'verifying' | 'complete'>('idle');
   
-  const { wallet, walletClient, publicClient: walletPublicClient, connect } = useWallet();
+  const { wallet, walletClient, publicClient: walletPublicClient, connect, switchToBase, isCorrectChain } = useWallet();
   const account = wallet.address;
+  const { identity } = useFarcasterIdentity();
+  const isDev = identity?.fid === DEV_FID;
+  const isAdminWallet = (account || '').toLowerCase() === CONTRACT_ADDRESSES.treasury.toLowerCase();
 
   const refreshStatus = React.useCallback(async () => {
     try {
@@ -97,18 +101,41 @@ export function StarterPackCard(): JSX.Element | null {
         return;
       }
 
+      // Admin/Dev bypass: skip payment and directly verify
+      if (isDev || isAdminWallet) {
+        setStep('verifying');
+        const zeroHash = '0x' + '0'.repeat(64);
+        const res = await authFetch("/api/starter/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ txHash: zeroHash }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || "Verification failed");
+        }
+        setStep('complete');
+        await refreshStatus();
+        return;
+      }
+
       // Use existing wallet client if available
       if (!walletClient) {
         setError('Wallet client not available. Please connect your wallet.');
         return;
       }
       
+      // Ensure Base chain before paying
+      if (!isCorrectChain) {
+        await switchToBase();
+      }
+
       // Pay to treasury
       const { hash } = await payInFBC(
         walletClient as any, 
         walletPublicClient as any, 
         CONTRACT_ADDRESSES.treasury, 
-        quote.priceWei
+        quote.amountWei
       );
       
       setStep('verifying');
@@ -164,8 +191,8 @@ export function StarterPackCard(): JSX.Element | null {
           
           {quote && step === 'payment' && (
             <div className="mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded">
-              <div className="text-sm">Price: {formatFBC(quote.priceWei)} FBC</div>
-              <div className="text-xs text-muted-foreground">(~${quote.priceUSD} USD)</div>
+              <div className="text-sm">Price: {formatFBC(quote.amountWei)} FBC</div>
+              <div className="text-xs text-muted-foreground">(~${quote.usdAmount || '1'} USD)</div>
             </div>
           )}
 

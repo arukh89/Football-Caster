@@ -1,9 +1,27 @@
 import type { Player } from '@/lib/types';
 import { reducers, getSpacetime } from './client';
 
+function idx(table: any, indexName: string): any {
+  const v = table?.[indexName];
+  return typeof v === 'function' ? v() : v;
+}
+
 function iso(ms: number | null | undefined): string | null {
   if (!ms && ms !== 0) return null;
   try { return new Date(ms!).toISOString(); } catch { return null; }
+}
+
+async function getReducer(name: string): Promise<(...args: any[]) => Promise<any>> {
+  const r: any = await reducers();
+  if (typeof r?.[name] === 'function') return r[name].bind(r);
+  if (typeof r?.get === 'function') {
+    const fn = r.get(name);
+    if (typeof fn === 'function') return fn;
+  }
+  if (typeof r?.call === 'function') {
+    return (...args: any[]) => r.call(name, ...args);
+  }
+  throw new Error(`Reducer ${name} not available`);
 }
 
 export async function stGetPlayersMine(fid: number): Promise<Player[]> {
@@ -111,7 +129,9 @@ export async function stListActiveAuctions(): Promise<any[]> {
 
 export async function stHasClaimedStarter(fid: number): Promise<boolean> {
   const st = await getSpacetime();
-  return !!(st.db.starterClaim.fid().find(BigInt(fid)) as any);
+  const index = idx(st.db.starterClaim, 'fid');
+  const row = index?.find ? index.find(BigInt(fid)) : undefined;
+  return !!row;
 }
 
 /**
@@ -123,13 +143,14 @@ export async function stHasEnteredBefore(fid: number): Promise<boolean> {
   const hasInventory = (Array.from(st.db.inventoryItem.iter()) as any[]).some(
     (item) => item.ownerFid === BigInt(fid)
   );
-  const hasClaimed = !!(st.db.starterClaim.fid().find(BigInt(fid)) as any);
+  const scIndex = idx(st.db.starterClaim, 'fid');
+  const hasClaimed = !!(scIndex?.find ? scIndex.find(BigInt(fid)) : undefined);
   return hasInventory || hasClaimed;
 }
 
 export async function stGrantStarterPack(fid: number, players: any[]): Promise<void> {
-  const r = await reducers();
-  await r.grant_starter_pack(fid, JSON.stringify({ players }));
+  const fn = await getReducer('grant_starter_pack');
+  await fn(fid, JSON.stringify({ players }));
 }
 
 export async function stCreateListing(fid: number, itemId: string, priceFbcWei: string): Promise<any> {
@@ -257,7 +278,8 @@ export async function stInboxMarkRead(fid: number, ids: string[]): Promise<void>
 
 export async function stGetUser(fid: number): Promise<any | null> {
   const st = await getSpacetime();
-  const u = st.db.user.fid().find(BigInt(fid)) as any;
+  const uIndex = idx(st.db.user, 'fid');
+  const u = uIndex?.find ? (uIndex.find(BigInt(fid)) as any) : null;
   return u ? { ...u, fid: Number(u.fid) } : null;
 }
 
@@ -266,16 +288,17 @@ export async function stGetUser(fid: number): Promise<any | null> {
  */
 export async function stIsTxUsed(txHash: string): Promise<boolean> {
   const st = await getSpacetime();
-  const tx = st.db.transactionUsed.txHash().find(txHash);
-  return !!tx;
+  const txIndex = idx(st.db.transactionUsed, 'txHash');
+  const row = txIndex?.find ? txIndex.find(txHash) : undefined;
+  return !!row;
 }
 
 /**
  * Mark transaction as used (via reducer) - prevents replay attacks
  */
 export async function stMarkTxUsed(txHash: string, fid: number, endpoint: string): Promise<void> {
-  const r = await reducers();
-  await r.mark_tx_used(txHash, fid, endpoint);
+  const fn = await getReducer('mark_tx_used');
+  await fn(txHash, fid, endpoint);
 }
 
 // PvP reducers
