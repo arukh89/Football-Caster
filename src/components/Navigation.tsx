@@ -7,6 +7,9 @@ import { Home, Users, ShoppingBag, Gavel, Inbox, Settings, Play, TrendingUp, Ref
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
+import { useWallet } from '@/hooks/useWallet';
+import { CONTRACT_ADDRESSES, DEV_FID } from '@/lib/constants';
 
 const navItems = [
   { href: '/', icon: Home, label: 'Home' },
@@ -22,6 +25,9 @@ const navItems = [
 export function Navigation(): JSX.Element {
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
+  const { identity } = useFarcasterIdentity();
+  const { wallet } = useWallet();
+  const isAdmin = (identity?.fid === DEV_FID) || ((wallet.address || '').toLowerCase() === CONTRACT_ADDRESSES.treasury.toLowerCase());
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden" role="navigation" aria-label="Primary">
@@ -63,6 +69,23 @@ export function Navigation(): JSX.Element {
                 </Link>
               );
             })}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex flex-col items-center gap-1 px-2 py-3 rounded-lg transition-colors',
+                  pathname === '/admin'
+                    ? 'bg-emerald-500/10 text-emerald-500'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+                aria-current={pathname === '/admin' ? 'page' : undefined}
+                aria-label="Admin"
+              >
+                <Settings className="h-6 w-6" />
+                <span className="text-xs font-medium text-center">Admin</span>
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -72,6 +95,9 @@ export function Navigation(): JSX.Element {
 
 export function DesktopNav(): JSX.Element {
   const pathname = usePathname();
+  const { identity } = useFarcasterIdentity();
+  const { wallet } = useWallet();
+  const isAdmin = (identity?.fid === DEV_FID) || ((wallet.address || '').toLowerCase() === CONTRACT_ADDRESSES.treasury.toLowerCase());
   async function checkInbox(): Promise<void> {
     try {
       const res = await fetch('/api/inbox?unread=true', { cache: 'no-store' });
@@ -120,6 +146,22 @@ export function DesktopNav(): JSX.Element {
           <Button variant="outline" className="gap-2" onClick={() => void checkInbox()} aria-label="Check Inbox">
             <RefreshCw className="h-4 w-4" /> Check Inbox
           </Button>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
+                pathname === '/admin'
+                  ? 'bg-emerald-500/10 text-emerald-500'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+              aria-current={pathname === '/admin' ? 'page' : undefined}
+              aria-label="Admin"
+            >
+              <Settings className="h-5 w-5" />
+              <span className="font-medium">Admin</span>
+            </Link>
+          )}
           <Link
             href="/settings"
             className={cn(

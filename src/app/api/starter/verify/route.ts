@@ -72,7 +72,8 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       txHash as Hash,
       wallet as Address,
       TREASURY_ADDRESS,
-      STARTER_PRICE_USD
+      STARTER_PRICE_USD,
+      true // allow any sender address (payer can be different from linked wallet)
     );
 
     if (!verification.valid) {

@@ -66,7 +66,7 @@ export async function verifyFBCTransfer(
   expectedFrom: Address,
   expectedTo: Address,
   expectedUsdAmount: string,
-  allowDevBypass = false
+  allowAnySender = false
 ): Promise<VerificationResult> {
   try {
     // Get transaction receipt
@@ -105,8 +105,8 @@ export async function verifyFBCTransfer(
       return { valid: false, error: 'Failed to decode transfer log' };
     }
 
-    // Verify from address
-    if (normalizeAddress(transfer.from) !== normalizeAddress(expectedFrom)) {
+    // Verify from address (optional)
+    if (!allowAnySender && normalizeAddress(transfer.from) !== normalizeAddress(expectedFrom)) {
       return {
         valid: false,
         error: `Sender mismatch: expected ${expectedFrom}, got ${transfer.from}`,
