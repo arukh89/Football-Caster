@@ -73,7 +73,12 @@ async function fetchFromDexscreener(): Promise<string | null> {
 async function fetchFromCustom(): Promise<string | null> {
   if (!CUSTOM_PRICE_URL) return null;
   try {
-    const response = await fetch(CUSTOM_PRICE_URL, { headers: { 'accept': 'application/json,*/*' } });
+    const response = await fetch(CUSTOM_PRICE_URL, {
+      headers: {
+        'accept': 'application/json,*/*',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
     const contentType = response.headers.get('content-type') || '';
 
     // Try JSON first when possible
