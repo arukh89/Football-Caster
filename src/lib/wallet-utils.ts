@@ -142,6 +142,7 @@ export async function payInFBC(
           to: toAddr,
           data,
           value,
+          chain: base,
         });
         await waitForTransactionReceipt(publicClient, { hash: swapHash });
       } catch (swapErr) {
