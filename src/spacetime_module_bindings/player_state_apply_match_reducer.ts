@@ -10,14 +10,10 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default __t.object("User", {
-  fid: __t.i64(),
-  wallet: __t.option(__t.string()),
-  createdAtMs: __t.i64(),
-  isNpc: __t.bool(),
-  elo: __t.i32(),
-  displayName: __t.option(__t.string()),
-  aiPersonaJson: __t.option(__t.string()),
-});
-
-
+export default {
+  playerId: __t.string(),
+  minutesPlayed: __t.i32(),
+  benched: __t.bool(),
+  result: __t.string(),
+  eventsJson: __t.string(),
+};

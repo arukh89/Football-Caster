@@ -16,6 +16,7 @@ export type MatchEvent =
   | 'injury' 
   | 'offside' 
   | 'foul' 
+  | 'var_decision'
   | 'half_time' 
   | 'full_time';
 
@@ -67,6 +68,12 @@ export interface MatchState {
   weather: WeatherCondition;
   isPlaying: boolean;
   events: MatchEventData[];
+  officials?: {
+    referee: string;
+    assistantLeft: string;
+    assistantRight: string;
+    varOfficial?: string | null;
+  } | null;
 }
 
 export interface MatchEventData {
@@ -77,12 +84,14 @@ export interface MatchEventData {
   description: string;
   commentary: string;
   significance: 'low' | 'medium' | 'high' | 'critical';
+  meta?: Record<string, any>;
 }
 
 export class MatchSimulator {
   private state: MatchState;
   private eventCallbacks: ((event: MatchEventData) => void)[] = [];
   private stateCallbacks: ((state: MatchState) => void)[] = [];
+  private officials: import('../npc/officials').CrewAssignment | null = null;
 
   constructor(homeTeam: TeamInMatch, awayTeam: TeamInMatch, weather?: WeatherCondition) {
     this.state = {
@@ -101,6 +110,18 @@ export class MatchSimulator {
       weather: weather || this.generateWeather(),
       isPlaying: false,
       events: [],
+      officials: null,
+    };
+  }
+
+  // Assign referee crew for this match (ref + assistants + optional VAR)
+  assignOfficials(crew: import('../npc/officials').CrewAssignment): void {
+    this.officials = crew;
+    this.state.officials = {
+      referee: crew.referee.officialId,
+      assistantLeft: crew.assistantLeft.officialId,
+      assistantRight: crew.assistantRight.officialId,
+      varOfficial: crew.varOfficial?.officialId ?? null,
     };
   }
 
@@ -220,23 +241,33 @@ export class MatchSimulator {
     
     const homeChance = homeStrength / (homeStrength + awayStrength);
 
+    // Dynamic foul probability based on referee strictness
+    const ref = this.officials?.referee || null;
+    const foulBase = ref ? require('../npc/officials').foulProbability(ref) : 0.06;
+
+    // Thresholds (cumulative)
+    const goalThreshold = 0.04; // ~ baseline
+    const shotThreshold = goalThreshold + 0.11; // 0.15
+    const cornerThreshold = shotThreshold + 0.10; // 0.25
+    const foulThreshold = cornerThreshold + Math.max(0, Math.min(0.2, foulBase)); // 0.27..0.45 approx
+
     // Goal chance (about 3-4 per match on average)
-    if (rand < 0.04) {
+    if (rand < goalThreshold) {
       const scoringTeam = Math.random() < homeChance ? 'home' : 'away';
       this.processGoal(scoringTeam);
     }
     // Shot chance
-    else if (rand < 0.15) {
+    else if (rand < shotThreshold) {
       const shootingTeam = Math.random() < homeChance ? 'home' : 'away';
       this.processShot(shootingTeam);
     }
     // Corner chance
-    else if (rand < 0.25) {
+    else if (rand < cornerThreshold) {
       const cornerTeam = Math.random() < homeChance ? 'home' : 'away';
       this.processCorner(cornerTeam);
     }
     // Foul chance
-    else if (rand < 0.35) {
+    else if (rand < foulThreshold) {
       const foulingTeam = Math.random() < 0.5 ? 'home' : 'away';
       this.processFoul(foulingTeam);
     }
@@ -262,11 +293,52 @@ export class MatchSimulator {
       commentary: this.generateCommentary('goal', team, scorer.name),
       significance: 'critical',
     });
+
+    // Potential VAR review
+    const v = this.officials?.varOfficial || null;
+    if (v) {
+      const chance = require('../npc/officials').varReviewChance(v);
+      if (Math.random() < chance) {
+        // Select reason and decision
+        const reasons = ['offside', 'foul', 'handball'] as const;
+        const reason = reasons[Math.floor(Math.random() * reasons.length)];
+        // 25% chance to overturn
+        const overturn = Math.random() < 0.25;
+        if (overturn) {
+          if (team === 'home') this.state.homeScore = Math.max(0, this.state.homeScore - 1);
+          else this.state.awayScore = Math.max(0, this.state.awayScore - 1);
+        }
+        this.addEvent({
+          type: 'var_decision',
+          minute: this.state.minute,
+          team,
+          description: overturn ? `VAR: Goal disallowed (${reason}).` : 'VAR: Goal stands.',
+          commentary: this.generateCommentary('var_decision', team),
+          significance: overturn ? 'high' : 'medium',
+          meta: { decision: overturn ? 'disallowed' : 'stands', reason },
+        });
+      }
+    }
   }
 
   private processShot(team: 'home' | 'away'): void {
+    // Offside detection influenced by assistant referee noise
+    const asst = this.getAssistantForSide(team);
+    const noise = asst ? require('../npc/officials').offsideNoise(asst) : 0.02;
+    if (Math.random() < noise) {
+      this.addEvent({
+        type: 'offside',
+        minute: this.state.minute,
+        team,
+        description: 'Flag up for offside.',
+        commentary: this.generateCommentary('offside', team),
+        significance: 'low',
+      });
+      return;
+    }
+
     this.state.shots[team]++;
-    
+
     const shooter = this.getRandomAttacker(team);
     const onTarget = Math.random() < 0.4;
     
@@ -309,9 +381,11 @@ export class MatchSimulator {
   private processFoul(team: 'home' | 'away'): void {
     this.state.fouls[team]++;
     const player = this.getRandomPlayer(team);
-    
-    // 20% chance of yellow card
-    if (Math.random() < 0.2) {
+    // Card severity influenced by referee
+    const ref = this.officials?.referee || null;
+    const sev = ref ? require('../npc/officials').cardSeverityFactor(ref) : 1.0;
+    const yellowChance = Math.min(0.5, 0.2 * sev);
+    if (Math.random() < yellowChance) {
       this.state.yellowCards[team]++;
       this.addEvent({
         type: 'yellow_card',
@@ -432,72 +506,43 @@ export class MatchSimulator {
   }
 
   private generateCommentary(eventType: MatchEvent, team: 'home' | 'away', player?: string): string {
-    const weather = this.state.weather;
-    const minute = this.state.minute;
-    
-    const templates: Record<MatchEvent, string[]> = {
-      kickoff: [
-        `And we're underway! ${weather === 'rainy' ? 'The rain is pouring down as' : ''} The match begins!`,
-        `The referee blows the whistle! ${weather === 'windy' ? 'Strong winds may play a factor today.' : ''}`,
-        `We're off! ${weather === 'sunny' ? 'Perfect conditions for football!' : 'Challenging weather conditions today.'}`,
-      ],
-      goal: [
-        `GOOOAL! ${player} finds the back of the net! What a finish!`,
-        `It's in! ${player} scores! ${weather === 'rainy' ? 'A stunning goal in difficult conditions!' : 'Brilliant!'}`,
-        `${player} strikes! The keeper had no chance! ${minute > 85 ? 'A crucial late goal!' : ''}`,
-      ],
-      shot: [
-        `${player} goes for goal... ${weather === 'windy' ? 'but the wind takes it wide!' : 'just wide!'}`,
-        `A shot from ${player}! ${weather === 'rainy' ? 'Slips on the wet surface' : 'Not quite on target'}`,
-        `${player} tries his luck from distance...`,
-      ],
-      save: [
-        `Great save! The keeper denies ${player}!`,
-        `${player} forces a brilliant save! ${weather === 'rainy' ? 'The keeper did well to hold onto that in the wet!' : ''}`,
-        `Close! ${player}'s effort is saved!`,
-      ],
-      corner: [
-        `Corner kick awarded. ${weather === 'windy' ? 'This could be tricky to defend with the wind.' : ''}`,
-        `A corner for the ${team} side. ${minute > 80 ? 'Late pressure building!' : ''}`,
-        `They'll take the corner... ${weather === 'rainy' ? 'Keeper will want to come for this despite the conditions.' : ''}`,
-      ],
-      freekick: [
-        `Free kick in a dangerous position...`,
-        `The referee awards a free kick. ${weather === 'windy' ? 'The wind could be a factor here.' : ''}`,
-      ],
-      penalty: [
-        `PENALTY! The referee points to the spot!`,
-      ],
-      yellow_card: [
-        `${player} goes into the book. That's a yellow card.`,
-        `The referee shows ${player} a yellow card for that challenge.`,
-      ],
-      red_card: [
-        `RED CARD! ${player} is sent off!`,
-      ],
-      substitution: [
-        `We're seeing a substitution...`,
-      ],
-      injury: [
-        `The physio is on... ${player} needs treatment.`,
-      ],
-      offside: [
-        `The flag is up! Offside called.`,
-      ],
-      foul: [
-        `Foul by ${player}. ${weather === 'rainy' ? 'Hard to stay on your feet in these conditions.' : ''}`,
-        `${player} commits a foul.`,
-      ],
-      half_time: [
-        `That's half-time! ${weather !== 'sunny' ? 'Both teams will be glad to get into the dressing room.' : ''}`,
-      ],
-      full_time: [
-        `The final whistle blows! That's full-time!`,
-      ],
+    // Use Indonesian commentary generator for realism
+    const map: Record<MatchEvent, string> = {
+      kickoff: 'chance',
+      goal: 'goal',
+      shot: 'shot',
+      save: 'save',
+      corner: 'chance',
+      freekick: 'chance',
+      penalty: 'chance',
+      yellow_card: 'card',
+      red_card: 'card',
+      substitution: 'chance',
+      injury: 'chance',
+      offside: 'offside',
+      foul: 'foul',
+      var_decision: 'var_decision',
+      half_time: 'chance',
+      full_time: 'chance',
     };
-
-    const options = templates[eventType] || ['Event occurred.'];
-    return options[Math.floor(Math.random() * options.length)];
+    try {
+      const kind = map[eventType] || 'chance';
+      const line = require('../npc/commentary').generateCommentaryLines([
+        { t: Date.now(), kind, team, player }
+      ])[0];
+      return line?.text || '';
+    } catch {
+      // Fallback minimal commentary
+      switch (eventType) {
+        case 'goal': return player ? `${player} mencetak gol!` : 'Gol tercipta!';
+        case 'shot': return player ? `${player} melepaskan tembakan.` : 'Tembakan dilepaskan.';
+        case 'save': return 'Penyelamatan oleh kiper!';
+        case 'offside': return 'Offside!';
+        case 'foul': return 'Pelanggaran terjadi.';
+        case 'yellow_card': return player ? `Kartu kuning untuk ${player}.` : 'Kartu kuning dikeluarkan.';
+        default: return 'Momen penting berlangsung.';
+      }
+    }
   }
 
   private generateHalfTimeCommentary(): string {
@@ -534,5 +579,11 @@ export class MatchSimulator {
 
   private notifyStateChange(): void {
     this.stateCallbacks.forEach((cb) => cb(this.getState()));
+  }
+
+  private getAssistantForSide(team: 'home' | 'away'): import('../npc/officials').OfficialModel | null {
+    if (!this.officials) return null;
+    // No strong orientation mapping; pick one at random
+    return Math.random() < 0.5 ? this.officials.assistantLeft : this.officials.assistantRight;
   }
 }

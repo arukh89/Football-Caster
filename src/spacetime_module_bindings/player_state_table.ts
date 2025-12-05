@@ -11,11 +11,16 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  fid: __t.i64().primaryKey(),
-  wallet: __t.option(__t.string()),
-  createdAtMs: __t.i64(),
-  isNpc: __t.bool(),
-  elo: __t.i32(),
-  displayName: __t.option(__t.string()),
-  aiPersonaJson: __t.option(__t.string()),
+  playerId: __t.string().primaryKey(),
+  ageYears: __t.i16(),
+  morale: __t.i32(),
+  fatigue: __t.i32(),
+  injuryStatus: __t.string(),
+  injuryEndMs: __t.option(__t.i64()),
+  satisfaction: __t.i32(),
+  loyalty: __t.i32(),
+  minutesPlayed7D: __t.i32(),
+  matchesPlayed7D: __t.i32(),
+  matchesBenched7D: __t.i32(),
+  lastMatchAtMs: __t.option(__t.i64()),
 });

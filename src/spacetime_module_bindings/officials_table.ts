@@ -11,11 +11,16 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  fid: __t.i64().primaryKey(),
-  wallet: __t.option(__t.string()),
-  createdAtMs: __t.i64(),
-  isNpc: __t.bool(),
-  elo: __t.i32(),
-  displayName: __t.option(__t.string()),
-  aiPersonaJson: __t.option(__t.string()),
+  officialId: __t.string().primaryKey(),
+  role: __t.string(),
+  strictness: __t.i32(),
+  advantageTendency: __t.i32(),
+  offsideTolerance: __t.i32(),
+  varPropensity: __t.i32(),
+  consistency: __t.i32(),
+  fitness: __t.i32(),
+  reputation: __t.i32(),
+  aiSeed: __t.i64(),
+  active: __t.bool(),
+  lastAssignedMs: __t.i64(),
 });

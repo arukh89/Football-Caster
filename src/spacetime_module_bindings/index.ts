@@ -35,6 +35,8 @@ import BuyNow from "./buy_now_reducer";
 export { BuyNow };
 import CloseListingAndTransfer from "./close_listing_and_transfer_reducer";
 export { CloseListingAndTransfer };
+import CommentaryAppend from "./commentary_append_reducer";
+export { CommentaryAppend };
 import CreateAuction from "./create_auction_reducer";
 export { CreateAuction };
 import CreateListing from "./create_listing_reducer";
@@ -49,14 +51,40 @@ import LinkWallet from "./link_wallet_reducer";
 export { LinkWallet };
 import MarkTxUsed from "./mark_tx_used_reducer";
 export { MarkTxUsed };
+import NpcAssignForUser from "./npc_assign_for_user_reducer";
+export { NpcAssignForUser };
+import NpcCreate from "./npc_create_reducer";
+export { NpcCreate };
+import NpcMintToken from "./npc_mint_token_reducer";
+export { NpcMintToken };
+import NpcUpdateState from "./npc_update_state_reducer";
+export { NpcUpdateState };
+import OfficialAssignToMatch from "./official_assign_to_match_reducer";
+export { OfficialAssignToMatch };
+import OfficialCreate from "./official_create_reducer";
+export { OfficialCreate };
+import OfficialUpdateAfterMatch from "./official_update_after_match_reducer";
+export { OfficialUpdateAfterMatch };
 import PlaceBid from "./place_bid_reducer";
 export { PlaceBid };
+import PlayerAgeTick from "./player_age_tick_reducer";
+export { PlayerAgeTick };
+import PlayerProfileInit from "./player_profile_init_reducer";
+export { PlayerProfileInit };
+import PlayerStateApplyMatch from "./player_state_apply_match_reducer";
+export { PlayerStateApplyMatch };
+import PlayerStateRecoverTick from "./player_state_recover_tick_reducer";
+export { PlayerStateRecoverTick };
 import PvpAccept from "./pvp_accept_reducer";
 export { PvpAccept };
 import PvpCreateChallenge from "./pvp_create_challenge_reducer";
 export { PvpCreateChallenge };
 import PvpSubmitResult from "./pvp_submit_result_reducer";
 export { PvpSubmitResult };
+import SquadMintFromFarcaster from "./squad_mint_from_farcaster_reducer";
+export { SquadMintFromFarcaster };
+import VarReviewRecord from "./var_review_record_reducer";
+export { VarReviewRecord };
 
 // Import and reexport all procedure arg types
 
@@ -65,6 +93,8 @@ import AuctionRow from "./auction_table";
 export { AuctionRow };
 import BidRow from "./bid_table";
 export { BidRow };
+import CommentaryLogRow from "./commentary_log_table";
+export { CommentaryLogRow };
 import EventRow from "./event_table";
 export { EventRow };
 import IdempotencyRow from "./idempotency_table";
@@ -75,8 +105,20 @@ import InventoryItemRow from "./inventory_item_table";
 export { InventoryItemRow };
 import ListingRow from "./listing_table";
 export { ListingRow };
+import MatchOfficialAssignmentRow from "./match_official_assignment_table";
+export { MatchOfficialAssignmentRow };
+import NpcAssignmentRow from "./npc_assignment_table";
+export { NpcAssignmentRow };
+import NpcRegistryRow from "./npc_registry_table";
+export { NpcRegistryRow };
+import OfficialsRow from "./officials_table";
+export { OfficialsRow };
+import PlayerStateRow from "./player_state_table";
+export { PlayerStateRow };
 import PvpMatchRow from "./pvp_match_table";
 export { PvpMatchRow };
+import SquadRegistryRow from "./squad_registry_table";
+export { SquadRegistryRow };
 import StarterClaimRow from "./starter_claim_table";
 export { StarterClaimRow };
 import TransactionUsedRow from "./transaction_used_table";
@@ -91,6 +133,8 @@ import Auction from "./auction_type";
 export { Auction };
 import Bid from "./bid_type";
 export { Bid };
+import CommentaryLog from "./commentary_log_type";
+export { CommentaryLog };
 import Event from "./event_type";
 export { Event };
 import Idempotency from "./idempotency_type";
@@ -101,8 +145,20 @@ import InventoryItem from "./inventory_item_type";
 export { InventoryItem };
 import Listing from "./listing_type";
 export { Listing };
+import MatchOfficialAssignment from "./match_official_assignment_type";
+export { MatchOfficialAssignment };
+import NpcAssignment from "./npc_assignment_type";
+export { NpcAssignment };
+import NpcRegistry from "./npc_registry_type";
+export { NpcRegistry };
+import Official from "./official_type";
+export { Official };
+import PlayerState from "./player_state_type";
+export { PlayerState };
 import PvpMatch from "./pvp_match_type";
 export { PvpMatch };
+import SquadRegistry from "./squad_registry_type";
+export { SquadRegistry };
 import StarterClaim from "./starter_claim_type";
 export { StarterClaim };
 import TransactionUsed from "./transaction_used_type";
@@ -136,6 +192,17 @@ const tablesSchema = __schema(
       { name: 'bid_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, BidRow),
+  __table({
+    name: 'commentary_log',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'commentary_log_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, CommentaryLogRow),
   __table({
     name: 'event',
     indexes: [
@@ -192,6 +259,61 @@ const tablesSchema = __schema(
     ],
   }, ListingRow),
   __table({
+    name: 'match_official_assignment',
+    indexes: [
+      { name: 'match_id', algorithm: 'btree', columns: [
+        'matchId',
+      ] },
+    ],
+    constraints: [
+      { name: 'match_official_assignment_match_id_key', constraint: 'unique', columns: ['matchId'] },
+    ],
+  }, MatchOfficialAssignmentRow),
+  __table({
+    name: 'npc_assignment',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'npc_assignment_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, NpcAssignmentRow),
+  __table({
+    name: 'npc_registry',
+    indexes: [
+      { name: 'npc_fid', algorithm: 'btree', columns: [
+        'npcFid',
+      ] },
+    ],
+    constraints: [
+      { name: 'npc_registry_npc_fid_key', constraint: 'unique', columns: ['npcFid'] },
+    ],
+  }, NpcRegistryRow),
+  __table({
+    name: 'officials',
+    indexes: [
+      { name: 'official_id', algorithm: 'btree', columns: [
+        'officialId',
+      ] },
+    ],
+    constraints: [
+      { name: 'officials_official_id_key', constraint: 'unique', columns: ['officialId'] },
+    ],
+  }, OfficialsRow),
+  __table({
+    name: 'player_state',
+    indexes: [
+      { name: 'player_id', algorithm: 'btree', columns: [
+        'playerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_state_player_id_key', constraint: 'unique', columns: ['playerId'] },
+    ],
+  }, PlayerStateRow),
+  __table({
     name: 'pvp_match',
     indexes: [
       { name: 'id', algorithm: 'btree', columns: [
@@ -202,6 +324,17 @@ const tablesSchema = __schema(
       { name: 'pvp_match_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, PvpMatchRow),
+  __table({
+    name: 'squad_registry',
+    indexes: [
+      { name: 'squad_id', algorithm: 'btree', columns: [
+        'squadId',
+      ] },
+    ],
+    constraints: [
+      { name: 'squad_registry_squad_id_key', constraint: 'unique', columns: ['squadId'] },
+    ],
+  }, SquadRegistryRow),
   __table({
     name: 'starter_claim',
     indexes: [
@@ -252,6 +385,7 @@ const tablesSchema = __schema(
 const reducersSchema = __reducers(
   __reducerSchema("buy_now", BuyNow),
   __reducerSchema("close_listing_and_transfer", CloseListingAndTransfer),
+  __reducerSchema("commentary_append", CommentaryAppend),
   __reducerSchema("create_auction", CreateAuction),
   __reducerSchema("create_listing", CreateListing),
   __reducerSchema("finalize_auction", FinalizeAuction),
@@ -259,10 +393,23 @@ const reducersSchema = __reducers(
   __reducerSchema("inbox_mark_read", InboxMarkRead),
   __reducerSchema("link_wallet", LinkWallet),
   __reducerSchema("mark_tx_used", MarkTxUsed),
+  __reducerSchema("npc_assign_for_user", NpcAssignForUser),
+  __reducerSchema("npc_create", NpcCreate),
+  __reducerSchema("npc_mint_token", NpcMintToken),
+  __reducerSchema("npc_update_state", NpcUpdateState),
+  __reducerSchema("official_assign_to_match", OfficialAssignToMatch),
+  __reducerSchema("official_create", OfficialCreate),
+  __reducerSchema("official_update_after_match", OfficialUpdateAfterMatch),
   __reducerSchema("place_bid", PlaceBid),
+  __reducerSchema("player_age_tick", PlayerAgeTick),
+  __reducerSchema("player_profile_init", PlayerProfileInit),
+  __reducerSchema("player_state_apply_match", PlayerStateApplyMatch),
+  __reducerSchema("player_state_recover_tick", PlayerStateRecoverTick),
   __reducerSchema("pvp_accept", PvpAccept),
   __reducerSchema("pvp_create_challenge", PvpCreateChallenge),
   __reducerSchema("pvp_submit_result", PvpSubmitResult),
+  __reducerSchema("squad_mint_from_farcaster", SquadMintFromFarcaster),
+  __reducerSchema("var_review_record", VarReviewRecord),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

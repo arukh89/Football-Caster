@@ -322,6 +322,124 @@ export async function stMarkTxUsed(txHash: string, fid: number, endpoint: string
   await fn(txHash, fid, endpoint);
 }
 
+// --- NPC & Squad wrappers ---
+export async function stNpcAssignForUser(userFid: number, count: number): Promise<void> {
+  await callReducerCompat('npc_assign_for_user', [userFid, count], { userFid, count });
+}
+
+export async function stNpcCreate(
+  npcFid: number,
+  displayName: string,
+  aiSeed: number,
+  difficultyTier: number,
+  budgetFbcWei: string,
+  personaJson: string,
+): Promise<void> {
+  await callReducerCompat('npc_create', [npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson], {
+    npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson,
+  });
+}
+
+export async function stNpcMintToken(npcFid: number, ownerFid: number): Promise<void> {
+  const r = await reducers() as any;
+  if (typeof r.npc_mint_token === 'function') {
+    await r.npc_mint_token(npcFid, ownerFid);
+    return;
+  }
+  await callReducerCompat('npc_mint_token', [npcFid, ownerFid], { npcFid, ownerFid });
+}
+
+export async function stSquadMintFromFarcaster(
+  sourceFid: number,
+  followers: number,
+  ownerFid: number,
+  intelligenceScore: number,
+  rank: string,
+  personaJson: string,
+): Promise<void> {
+  const r = await reducers() as any;
+  if (typeof r.squad_mint_from_farcaster === 'function') {
+    await r.squad_mint_from_farcaster(sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson);
+    return;
+  }
+  await callReducerCompat('squad_mint_from_farcaster', [sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson], {
+    sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson,
+  });
+}
+
+export async function stNpcUpdateState(npcFid: number, nextDecisionAtMs: number, budgetFbcWei: string): Promise<void> {
+  await callReducerCompat('npc_update_state', [npcFid, nextDecisionAtMs, budgetFbcWei], { npcFid, nextDecisionAtMs, budgetFbcWei });
+}
+
+// Player state
+export async function stPlayerProfileInit(playerId: string, ageYears: number, morale: number, fatigue: number, satisfaction: number, loyalty: number): Promise<void> {
+  await callReducerCompat('player_profile_init', [playerId, ageYears, morale, fatigue, satisfaction, loyalty], {
+    playerId, ageYears, morale, fatigue, satisfaction, loyalty,
+  });
+}
+
+export async function stPlayerStateApplyMatch(playerId: string, minutesPlayed: number, benched: boolean, result: string, eventsJson: string): Promise<void> {
+  await callReducerCompat('player_state_apply_match', [playerId, minutesPlayed, benched, result, eventsJson], {
+    playerId, minutesPlayed, benched, result, eventsJson,
+  });
+}
+
+export async function stPlayerStateRecoverTick(nowMs: number): Promise<void> {
+  await callReducerCompat('player_state_recover_tick', [nowMs], { nowMs });
+}
+
+export async function stPlayerAgeTick(): Promise<void> {
+  const r = await reducers() as any;
+  if (typeof r.player_age_tick === 'function') return r.player_age_tick();
+  await callReducerCompat('player_age_tick', [], {});
+}
+
+// Officials
+export async function stOfficialCreate(
+  role: string,
+  aiSeed: number,
+  strictness: number,
+  advantageTendency: number,
+  offsideTolerance: number,
+  varPropensity: number,
+  consistency: number,
+  fitness: number,
+  reputation: number,
+): Promise<void> {
+  const r = await reducers() as any;
+  if (typeof r.official_create === 'function') {
+    await r.official_create(role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation);
+    return;
+  }
+  await callReducerCompat('official_create', [role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation], {
+    role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation,
+  });
+}
+
+export async function stOfficialAssignToMatch(matchId: string, refereeId: string, assistantLeftId: string, assistantRightId: string, varId?: string | null): Promise<void> {
+  await callReducerCompat('official_assign_to_match', [matchId, refereeId, assistantLeftId, assistantRightId, varId ?? null], {
+    matchId, refereeId, assistantLeftId, assistantRightId, varId: varId ?? null,
+  });
+}
+
+export async function stOfficialUpdateAfterMatch(officialId: string, fitnessDelta: number, reputationDelta: number, consistencyDelta: number): Promise<void> {
+  await callReducerCompat('official_update_after_match', [officialId, fitnessDelta, reputationDelta, consistencyDelta], {
+    officialId, fitnessDelta, reputationDelta, consistencyDelta,
+  });
+}
+
+export async function stVarReviewRecord(matchId: string, tsMs: number, decision: string, reason: string, metaJson: string): Promise<void> {
+  await callReducerCompat('var_review_record', [matchId, tsMs, decision, reason, metaJson], { matchId, tsMs, decision, reason, metaJson });
+}
+
+export async function stCommentaryAppend(matchId: string, tsMs: number, tone: string, lang: string, text: string, metaJson: string): Promise<void> {
+  await callReducerCompat('commentary_append', [matchId, tsMs, tone, lang, text, metaJson], { matchId, tsMs, tone, lang, text, metaJson });
+}
+
+export async function stOfficialSetActive(officialId: string, active: boolean): Promise<void> {
+  await callReducerCompat('official_set_active', [officialId, active], { officialId, active });
+}
+
 // PvP reducers
 export async function stPvpChallenge(challengerFid: number, challengedFid: number): Promise<{ id: string }> {
   const r = await reducers();
