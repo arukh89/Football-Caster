@@ -5,6 +5,7 @@ import { base } from 'wagmi/chains';
 import type { WalletState } from '@/lib/types';
 import type { WalletClient, PublicClient } from 'viem';
 import { CHAIN_CONFIG } from '@/lib/constants';
+import { useIsInFarcaster } from '@/hooks/useIsInFarcaster';
 
 /**
  * Hook for wallet connection and management
@@ -25,6 +26,7 @@ export function useWallet(): {
   const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  const isInFarcaster = useIsInFarcaster();
 
   const wallet: WalletState = {
     address,
@@ -35,11 +37,23 @@ export function useWallet(): {
   const isCorrectChain = chainId === CHAIN_CONFIG.chainId;
 
   const connect = (): void => {
-    // Use the first available connector (typically MetaMask or Warplet)
-    const connector = connectors[0];
-    if (connector) {
-      wagmiConnect({ connector });
-    }
+    // Prefer Farcaster connector inside Mini App env, otherwise prefer injected (MetaMask)
+    const pick = () => {
+      if (isInFarcaster) {
+        return (
+          connectors.find((c: any) => (c.id?.toString() || '').includes('farcaster') || (c.name || '').toLowerCase().includes('farcaster')) ||
+          connectors.find((c) => c.ready) ||
+          connectors[0]
+        );
+      }
+      return (
+        connectors.find((c: any) => (c.id === 'injected' || (c.name || '').toLowerCase().includes('metamask')) && c.ready) ||
+        connectors.find((c) => c.ready) ||
+        connectors[0]
+      );
+    };
+    const connector = pick();
+    if (connector) wagmiConnect({ connector });
   };
 
   const disconnect = (): void => {
