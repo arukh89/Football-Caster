@@ -5,7 +5,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stHasClaimedStarter, stGrantStarterPack, stIsTxUsed, stMarkTxUsed, stNpcAssignForUser } from '@/lib/spacetime/api';
+import { stHasClaimedStarter, stGrantStarterPack, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
 import { verifyFBCTransfer } from '@/lib/services/verification';
 import { validate, verifyStarterSchema } from '@/lib/middleware/validation';
 import { requireAuth, isDevFID } from '@/lib/middleware/auth';
@@ -51,8 +51,6 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         position: null,
         rating: p.rating,
       })));
-      // Assign 18 tradable NPC managers to the user
-      await stNpcAssignForUser(fid, 18);
       return NextResponse.json({ success: true, pack, bypass: true });
     }
 
@@ -96,8 +94,6 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       position: null,
       rating: p.rating,
     })));
-    // Assign 18 tradable NPC managers to the user
-    await stNpcAssignForUser(fid, 18);
 
     return NextResponse.json({ success: true, pack });
   } catch (error) {

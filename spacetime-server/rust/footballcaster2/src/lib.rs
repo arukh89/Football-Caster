@@ -552,61 +552,190 @@ fn on_item_transferred(ctx: &ReducerContext, item_id: &str, to_fid: i64) {
  #[reducer]
  pub fn mark_tx_used(ctx: &ReducerContext, tx_hash: String, fid: i64, endpoint: String) {
      let tx_table = ctx.db().transaction_used();
-     
-     // Check if transaction hash already used
+     // Idempotency: panic if already used
      if tx_table.tx_hash().find(&tx_hash).is_some() {
          panic!("tx_already_used");
      }
+     // Mark transaction as used
+     tx_table.insert(TransactionUsed {
+         tx_hash,
+         used_at_ms: now_ms(ctx),
+         used_by_fid: fid,
+         endpoint,
+     });
+ }
 
-// --- NPC & Squad Reducers (signatures only; implementation later) ---
+// --- NPC & Squad Reducers ---
 
 #[reducer]
 pub fn npc_create(
-    _ctx: &ReducerContext,
-    _npc_fid: i64,
-    _display_name: String,
-    _ai_seed: i64,
-    _difficulty_tier: i16,
-    _budget_fbc_wei: String,
-    _persona_json: String,
+    ctx: &ReducerContext,
+    npc_fid: i64,
+    display_name: String,
+    ai_seed: i64,
+    difficulty_tier: i16,
+    budget_fbc_wei: String,
+    persona_json: String,
 ) {
-    unimplemented!("npc_create not implemented yet");
+    let now = now_ms(ctx);
+
+    // Upsert user with NPC flags
+    let users = ctx.db().user();
+    match users.fid().find(&npc_fid) {
+        Some(mut u) => {
+            u.is_npc = true;
+            u.display_name = Some(display_name.clone());
+            u.ai_persona_json = Some(persona_json.clone());
+            users.fid().update(u);
+        }
+        None => {
+            users.insert(User {
+                fid: npc_fid,
+                wallet: None,
+                created_at_ms: now,
+                is_npc: true,
+                elo: 1000,
+                display_name: Some(display_name.clone()),
+                ai_persona_json: Some(persona_json.clone()),
+            });
+        }
+    }
+
+    // Upsert NPC registry row
+    let tbl = ctx.db().npc_registry();
+    match tbl.npc_fid().find(&npc_fid) {
+        Some(mut n) => {
+            n.ai_seed = ai_seed;
+            n.difficulty_tier = difficulty_tier;
+            n.budget_fbc_wei = budget_fbc_wei.clone();
+            n.persona = persona_json;
+            n.manager_confidence = 50;
+            n.pressure_level = 0;
+            n.mood = "calm".to_string();
+            n.next_decision_at_ms = now;
+            n.last_active_ms = now;
+            n.active = true;
+            tbl.npc_fid().update(n);
+        }
+        None => {
+            tbl.insert(NpcRegistry {
+                npc_fid,
+                token_id: None,
+                ai_seed,
+                difficulty_tier,
+                budget_fbc_wei,
+                persona: display_name, // store display name or persona JSON? keep display name string
+                owner_fid: None,
+                manager_confidence: 50,
+                pressure_level: 0,
+                mood: "calm".to_string(),
+                next_decision_at_ms: now,
+                last_active_ms: now,
+                active: true,
+            });
+        }
+    }
 }
 
 #[reducer]
-pub fn npc_assign_for_user(_ctx: &ReducerContext, _user_fid: i64, _count: i16) {
-    unimplemented!("npc_assign_for_user not implemented yet");
+pub fn npc_mint_token(ctx: &ReducerContext, npc_fid: i64, owner_fid: i64) {
+    let now = now_ms(ctx);
+    let token_id = format!("npc-{}", npc_fid);
+
+    // Ensure inventory item exists (idempotent)
+    let items = ctx.db().inventory_item();
+    if items.item_id().find(&token_id).is_none() {
+        let evt = append_event(ctx, "npc_token_minted", owner_fid, format!("{{\"npc_fid\":{}}}", npc_fid), Some(token_id.clone()));
+        items.insert(InventoryItem {
+            item_id: token_id.clone(),
+            owner_fid,
+            item_type: "npc_manager".into(),
+            acquired_at_ms: now,
+            hold_until_ms: 0,
+            source_event_id: evt.id,
+        });
+    }
+
+    // Update registry owner and token id
+    if let Some(mut n) = ctx.db().npc_registry().npc_fid().find(&npc_fid) {
+        n.owner_fid = Some(owner_fid);
+        n.token_id = Some(token_id);
+        ctx.db().npc_registry().npc_fid().update(n);
+    }
 }
 
 #[reducer]
-pub fn npc_mint_token(_ctx: &ReducerContext, _npc_fid: i64, _owner_fid: i64) {
-    unimplemented!("npc_mint_token not implemented yet");
-}
+pub fn npc_assign_for_user(ctx: &ReducerContext, user_fid: i64, count: i16) {
+    if count <= 0 { return; }
 
-#[reducer]
-pub fn squad_mint_from_farcaster(
-    _ctx: &ReducerContext,
-    _source_fid: i64,
-    _followers: i64,
-    _owner_fid: i64,
-    _intelligence_score: i32,
-    _rank: String,
-    _persona_json: String,
-) {
-    unimplemented!("squad_mint_from_farcaster not implemented yet");
+    let now = now_ms(ctx);
+    let mut remaining = count as i32;
+
+    // Collect available NPCs (active, no owner)
+    let mut available: Vec<NpcRegistry> = Vec::new();
+    for n in ctx.db().npc_registry().iter() {
+        if n.active && n.owner_fid.is_none() {
+            available.push(n);
+        }
+    }
+
+    if (available.len() as i32) < remaining {
+        panic!("insufficient_npc_pool");
+    }
+
+    for n in available.into_iter() {
+        if remaining <= 0 { break; }
+        // Idempotent assignment id
+        let assign_id = format!("{}:{}", user_fid, n.npc_fid);
+        let aidx = ctx.db().npc_assignment().id();
+        if aidx.find(&assign_id).is_none() {
+            ctx.db().npc_assignment().insert(NpcAssignment {
+                id: assign_id,
+                user_fid,
+                npc_fid: n.npc_fid,
+                assigned_at_ms: now,
+            });
+        }
+        // Mint token to user if needed
+        let token_id = format!("npc-{}", n.npc_fid);
+        let items = ctx.db().inventory_item();
+        if items.item_id().find(&token_id).is_none() {
+            let evt = append_event(ctx, "npc_assigned", user_fid, format!("{{\"npc_fid\":{}}}", n.npc_fid), Some(token_id.clone()));
+            items.insert(InventoryItem {
+                item_id: token_id.clone(),
+                owner_fid: user_fid,
+                item_type: "npc_manager".into(),
+                acquired_at_ms: now,
+                hold_until_ms: 0,
+                source_event_id: evt.id,
+            });
+        }
+        // Update registry owner
+        if let Some(mut row) = ctx.db().npc_registry().npc_fid().find(&n.npc_fid) {
+            row.owner_fid = Some(user_fid);
+            row.token_id = Some(token_id);
+            ctx.db().npc_registry().npc_fid().update(row);
+        }
+        remaining -= 1;
+    }
 }
 
 #[reducer]
 pub fn npc_update_state(
-    _ctx: &ReducerContext,
-    _npc_fid: i64,
-    _next_decision_at_ms: i64,
-    _budget_fbc_wei: String,
+    ctx: &ReducerContext,
+    npc_fid: i64,
+    next_decision_at_ms: i64,
+    budget_fbc_wei: String,
 ) {
-    unimplemented!("npc_update_state not implemented yet");
+    if let Some(mut n) = ctx.db().npc_registry().npc_fid().find(&npc_fid) {
+        n.next_decision_at_ms = next_decision_at_ms;
+        n.budget_fbc_wei = budget_fbc_wei;
+        n.last_active_ms = now_ms(ctx);
+        ctx.db().npc_registry().npc_fid().update(n);
+    }
 }
 
-// --- Player State Reducers (signatures only) ---
+// --- Player State Reducers (stubs) ---
 
 #[reducer]
 pub fn player_profile_init(
@@ -617,9 +746,7 @@ pub fn player_profile_init(
     _fatigue: i32,
     _satisfaction: i32,
     _loyalty: i32,
-) {
-    unimplemented!("player_profile_init not implemented yet");
-}
+) { unimplemented!("player_profile_init not implemented yet"); }
 
 #[reducer]
 pub fn player_state_apply_match(
@@ -629,9 +756,7 @@ pub fn player_state_apply_match(
     _benched: bool,
     _result: String,
     _events_json: String,
-) {
-    unimplemented!("player_state_apply_match not implemented yet");
-}
+) { unimplemented!("player_state_apply_match not implemented yet"); }
 
 #[reducer]
 pub fn player_state_recover_tick(_ctx: &ReducerContext, _now_ms: i64) {
@@ -639,11 +764,9 @@ pub fn player_state_recover_tick(_ctx: &ReducerContext, _now_ms: i64) {
 }
 
 #[reducer]
-pub fn player_age_tick(_ctx: &ReducerContext) {
-    unimplemented!("player_age_tick not implemented yet");
-}
+pub fn player_age_tick(_ctx: &ReducerContext) { unimplemented!("player_age_tick not implemented yet"); }
 
-// --- Officials & Commentary Reducers (signatures only) ---
+// --- Officials & Commentary Reducers (stubs) ---
 
 #[reducer]
 pub fn official_create(
@@ -657,9 +780,7 @@ pub fn official_create(
     _consistency: i32,
     _fitness: i32,
     _reputation: i32,
-) {
-    unimplemented!("official_create not implemented yet");
-}
+) { unimplemented!("official_create not implemented yet"); }
 
 #[reducer]
 pub fn official_assign_to_match(
@@ -669,9 +790,7 @@ pub fn official_assign_to_match(
     _assistant_left_id: String,
     _assistant_right_id: String,
     _var_id: Option<String>,
-) {
-    unimplemented!("official_assign_to_match not implemented yet");
-}
+) { unimplemented!("official_assign_to_match not implemented yet"); }
 
 #[reducer]
 pub fn official_update_after_match(
@@ -680,9 +799,7 @@ pub fn official_update_after_match(
     _fitness_delta: i32,
     _reputation_delta: i32,
     _consistency_delta: i32,
-) {
-    unimplemented!("official_update_after_match not implemented yet");
-}
+) { unimplemented!("official_update_after_match not implemented yet"); }
 
 #[reducer]
 pub fn var_review_record(
@@ -692,9 +809,7 @@ pub fn var_review_record(
     _decision: String,
     _reason: String,
     _meta_json: String,
-) {
-    unimplemented!("var_review_record not implemented yet");
-}
+) { unimplemented!("var_review_record not implemented yet"); }
 
 #[reducer]
 pub fn commentary_append(
@@ -705,15 +820,4 @@ pub fn commentary_append(
     _lang: String,
     _text: String,
     _meta_json: String,
-) {
-    unimplemented!("commentary_append not implemented yet");
-}
-     
-     // Mark transaction as used
-     tx_table.insert(TransactionUsed {
-         tx_hash,
-         used_at_ms: now_ms(ctx),
-         used_by_fid: fid,
-         endpoint,
-     });
- }
+) { unimplemented!("commentary_append not implemented yet"); }

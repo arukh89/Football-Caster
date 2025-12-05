@@ -4,10 +4,10 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { requireAuth, isDevFID } from '@/lib/middleware/auth';
-import { adminGrantStarterSchema, validate } from '@/lib/middleware/validation';
-import { stHasClaimedStarter, stGrantStarterPack, stLinkWallet } from '@/lib/spacetime/api';
+import { requireAuth, isAdminFID } from '@/lib/middleware/auth';
+import { stHasClaimedStarter, stGrantStarterPack, stLinkWallet, stNpcAssignForUser } from '@/lib/spacetime/api';
 import { reducers as stReducers, getEnv, getSpacetime } from '@/lib/spacetime/client';
+import { adminGrantStarterSchema, validate } from '@/lib/middleware/validation';
 import type { Address } from 'viem';
 import { recoverMessageAddress, isAddressEqual } from 'viem';
 import { randomUUID } from 'crypto';
@@ -74,8 +74,8 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     const { fid, wallet, signature, message } = validation.data as { fid: number; wallet?: string; signature?: `0x${string}`; message?: string };
 
     // Authorization: require admin signature unless dev FID
-    const isDev = isDevFID(ctx.fid);
-    if (!isDev) {
+    const isAdmin = isAdminFID(ctx.fid);
+    if (!isAdmin) {
       if (!signature || !message) {
         return NextResponse.json({ error: 'Missing admin signature' }, { status: 400 });
       }
@@ -108,7 +108,19 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       );
     }
 
-    return NextResponse.json({ success: true, fid, linkedWallet: wallet || null, playersGranted: players.length });
+    // Admin-only: assign 18 tradable NPC managers to the user
+    try {
+      await stNpcAssignForUser(fid, 18);
+    } catch (e) {
+      const msg = (e as Error)?.message || String(e);
+      if (msg.includes('insufficient_npc_pool')) {
+        return NextResponse.json({ error: 'insufficient_npc_pool', detail: 'Not enough NPCs available to assign 18' }, { status: 409 });
+      }
+      // soft-fail other errors
+      console.warn('NPC assign failed:', msg);
+    }
+
+    return NextResponse.json({ success: true, fid, linkedWallet: wallet || null, playersGranted: players.length, npcsAssigned: 18 });
   } catch (error) {
     console.error('Admin grant starter error:', error);
     const msg = (error as Error)?.message || String(error);

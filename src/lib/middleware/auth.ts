@@ -109,3 +109,14 @@ export function isDevFID(fid: number): boolean {
   const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
   return fid === devFid;
 }
+
+/**
+ * Admin check via env ADMIN_FIDS (comma-separated list of FIDs)
+ */
+export function isAdminFID(fid: number): boolean {
+  const list = (process.env.ADMIN_FIDS || '')
+    .split(',')
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n));
+  return list.includes(fid);
+}
