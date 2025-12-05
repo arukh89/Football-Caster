@@ -1,16 +1,20 @@
 /**
  * Pricing Service - FBC/USD price fetching
- * Primary: Clanker, Fallback: Dexscreener
+ * Sources priority: 0x/Matcha → Custom URL → Dexscreener → Clanker
  */
 
+import { CONTRACT_ADDRESSES } from '@/lib/constants';
 
 const CLANKER_URL = 'https://www.clanker.world/clanker/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || process.env.PRICE_URL || '';
+const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
+// Canonical USDC on Base mainnet
+const USDC_BASE: `0x${string}` = '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0';
 
 interface PriceData {
   priceUsd: string;
-  source: 'clanker' | 'dexscreener' | 'custom';
+  source: 'clanker' | 'dexscreener' | 'custom' | '0x';
   timestamp: number;
 }
 
@@ -35,6 +39,34 @@ async function fetchFromClanker(): Promise<string | null> {
     return null;
   } catch (error) {
     console.error('Clanker fetch error:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch price via 0x (Matcha) aggregator on Base chain.
+ * We request a quote for buying exactly 1e18 wei of FBC with USDC and
+ * convert returned sellAmount (USDC in 6 decimals) to USD per 1 FBC.
+ */
+async function fetchFrom0x(): Promise<string | null> {
+  try {
+    const fbc = CONTRACT_ADDRESSES.fbc;
+    const url = `${OX_PRICE_URL}?sellToken=${USDC_BASE}&buyToken=${fbc}&buyAmount=1000000000000000000`;
+    const res = await fetch(url, {
+      headers: {
+        'accept': 'application/json',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    const sellAmount = data?.sellAmount; // in USDC base units (6 decimals)
+    if (!sellAmount) return null;
+    const usd = Number(sellAmount) / 1e6;
+    if (!isFinite(usd) || usd <= 0) return null;
+    return String(usd);
+  } catch (err) {
+    console.error('0x price fetch error:', err);
     return null;
   }
 }
@@ -79,30 +111,27 @@ async function fetchFromCustom(): Promise<string | null> {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
     });
-    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
 
-    // Try JSON first when possible
-    if (contentType.includes('application/json')) {
-      const data = await response.json().catch(() => null);
-      if (data) {
-        const candidates = [
-          (data as any).priceUsd,
-          (data as any).price_usd,
-          (data as any).price,
-          (data as any).usd,
-          (data as any)?.data?.priceUsd,
-          (data as any)?.data?.price_usd,
-        ];
-        for (const c of candidates) {
-          const v = typeof c === 'number' ? c : typeof c === 'string' ? parseFloat(c) : NaN;
-          if (!isNaN(v) && v > 0) return String(v);
-        }
+    // Try JSON first when possible (parse from text)
+    try {
+      const data = JSON.parse(text);
+      const candidates = [
+        (data as any).priceUsd,
+        (data as any).price_usd,
+        (data as any).price,
+        (data as any).usd,
+        (data as any)?.data?.priceUsd,
+        (data as any)?.data?.price_usd,
+      ];
+      for (const c of candidates) {
+        const v = typeof c === 'number' ? c : typeof c === 'string' ? parseFloat(c) : NaN;
+        if (!isNaN(v) && v > 0) return String(v);
       }
-    }
+    } catch {}
 
-    // Fallback: attempt to parse from text
-    const text = contentType.includes('application/json') ? JSON.stringify(await response.json().catch(() => ({}))) : await response.text();
-    // Look for explicit priceUsd fields first
+    // Fallback: attempt to parse numeric value from text
+    // Look for explicit priceUsd fields first within the raw text
     let match = text.match(/priceUsd"?\s*[:=]\s*"?([0-9]+(?:\.[0-9]+)?)/i);
     if (match?.[1]) return match[1];
     // Generic $<number> pattern as a last resort
@@ -124,17 +153,24 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Prefer custom endpoint when provided, then Dexscreener, fallback to Clanker HTML
+  // Prefer 0x (Matcha), then custom endpoint, then Dexscreener, then Clanker HTML
   let priceUsd: string | null = null;
-  let source: 'clanker' | 'dexscreener' | 'custom' = 'dexscreener';
+  let source: 'clanker' | 'dexscreener' | 'custom' | '0x' = 'dexscreener';
 
-  if (CUSTOM_PRICE_URL) {
+  // 0x/Matcha
+  priceUsd = await fetchFrom0x();
+  if (priceUsd) source = '0x';
+
+  // Custom URL
+  if (!priceUsd && CUSTOM_PRICE_URL) {
     priceUsd = await fetchFromCustom();
-    source = 'custom';
+    if (priceUsd) source = 'custom';
   }
+
+  // Dexscreener
   if (!priceUsd) {
     priceUsd = await fetchFromDexscreener();
-    source = 'dexscreener';
+    if (priceUsd) source = 'dexscreener';
   }
 
   // Fallback to Clanker

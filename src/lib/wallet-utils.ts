@@ -97,7 +97,6 @@ export async function payInFBC(
   publicClient: PublicClient,
   to: `0x${string}`,
   amount: string,
-  batchIfPossible = true
 ): Promise<{ hash: `0x${string}`; success: boolean }> {
   try {
     const [account] = await walletClient.getAddresses();
@@ -107,48 +106,8 @@ export async function payInFBC(
 
     const amountBigInt = BigInt(amount);
 
-    // Check if we need approval first using public client
-    const currentAllowance = await readContract(publicClient, {
-      address: CONTRACT_ADDRESSES.fbc,
-      abi: ERC20_ABI,
-      functionName: 'allowance',
-      args: [account, to],
-    });
-
-    // If allowance is sufficient, just transfer
-    if (currentAllowance >= amountBigInt) {
-      const hash = await walletClient.writeContract({
-        address: CONTRACT_ADDRESSES.fbc,
-        abi: ERC20_ABI,
-        functionName: 'transfer',
-        args: [to, amountBigInt],
-        account,
-        chain: base,
-      });
-
-      await waitForTransactionReceipt(publicClient, { hash });
-
-      return { hash, success: true };
-    }
-
-    // Need approval - check if we can batch (EIP-5792)
-    // For simplicity, we'll do sequential transactions
-    // In production, check for EIP-5792 support and batch if available
-
-    // First approve
-    const approveHash = await walletClient.writeContract({
-      address: CONTRACT_ADDRESSES.fbc,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [to, amountBigInt],
-      account,
-      chain: base,
-    });
-
-    await waitForTransactionReceipt(publicClient, { hash: approveHash });
-
-    // Then transfer
-    const transferHash = await walletClient.writeContract({
+    // Direct ERC-20 transfer (no approval needed for simple sends)
+    const hash = await walletClient.writeContract({
       address: CONTRACT_ADDRESSES.fbc,
       abi: ERC20_ABI,
       functionName: 'transfer',
@@ -157,14 +116,19 @@ export async function payInFBC(
       chain: base,
     });
 
-    await waitForTransactionReceipt(publicClient, { hash: transferHash });
+    await waitForTransactionReceipt(publicClient, { hash });
 
-    return { hash: transferHash, success: true };
+    return { hash, success: true };
   } catch (err) {
     console.error('Payment error:', err);
     throw err;
   }
 }
+
+/**
+ * Send FBC tokens (alias for payInFBC)
+ */
+export const sendFBC = payInFBC;
 
 /**
  * Format FBC amount from wei to readable format
