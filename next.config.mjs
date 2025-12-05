@@ -15,6 +15,7 @@ const nextConfig = {
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
               "connect-src 'self' https://api.warpcast.com https://client.warpcast.com https://*.warpcast.com https://client.farcaster.xyz https://auth.farcaster.xyz https://*.farcaster.xyz https://football-caster-new.vercel.app https://www.clanker.world https://api.dexscreener.com https://mainnet.base.org https://*.base.org https://*.alchemy.com https://*.ankr.com https://*.vercel.app https://maincloud.spacetimedb.com wss://maincloud.spacetimedb.com wss://*.spacetimedb.com",
+              "connect-src https://base.api.0x.org https://api.0x.org",
               "frame-ancestors *",
               "worker-src 'self' blob:",
               "child-src 'self' blob:",
