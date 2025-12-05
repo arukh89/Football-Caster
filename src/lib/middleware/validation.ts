@@ -24,6 +24,13 @@ export const verifyStarterSchema = z.object({
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
 });
 
+// ========== ADMIN ==========
+
+export const adminGrantStarterSchema = z.object({
+  fid: z.number().int().positive(),
+  wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+});
+
 // ========== MARKETPLACE ==========
 
 export const createListingSchema = z.object({
