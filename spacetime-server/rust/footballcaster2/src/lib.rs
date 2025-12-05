@@ -221,18 +221,30 @@
  
  #[reducer]
  pub fn grant_starter_pack(ctx: &ReducerContext, fid: i64, players_json: String) {
-     if ctx.db().starter_claim().fid().find(&fid).is_some() { panic!("starter_already_claimed"); }
-     let now = now_ms(ctx);
-     ctx.db().starter_claim().insert(StarterClaim { fid, claimed_at_ms: now });
-     let evt = append_event(ctx, "starter_pack_granted", fid, players_json.clone(), None);
-     let payload: StarterPackPayload = serde_json::from_str(&players_json).unwrap_or_default();
-     let hold_until = now + HOLD_DAYS * 24 * 60 * 60 * 1000;
-     for p in payload.players.iter() {
-         let items = ctx.db().inventory_item();
-         if items.item_id().find(&p.player_id).is_some() { items.item_id().delete(&p.player_id); }
-         items.insert(InventoryItem { item_id: p.player_id.clone(), owner_fid: fid, item_type: "player".into(), acquired_at_ms: now, hold_until_ms: hold_until, source_event_id: evt.id.clone() });
-     }
-     push_inbox(ctx, fid, format!("starter-{}", evt.id), "starter_pack", "Starter Pack Granted", &format!("You received {} players from starter pack.", payload.players.len()));
+    // Parse and validate payload FIRST to avoid partial writes on bad input
+    let payload: StarterPackPayload = match serde_json::from_str(&players_json) {
+        Ok(p) => p,
+        Err(_) => panic!("invalid_payload"),
+    };
+    if payload.players.is_empty() { panic!("no_players"); }
+
+    if ctx.db().starter_claim().fid().find(&fid).is_some() { panic!("starter_already_claimed"); }
+
+    let now = now_ms(ctx);
+    // Record the claim only after validation
+    ctx.db().starter_claim().insert(StarterClaim { fid, claimed_at_ms: now });
+
+    // Store a canonical JSON form of the payload in the event for reliable consumers
+    let evt_payload = serde_json::to_string(&payload).unwrap_or_else(|_| players_json.clone());
+    let evt = append_event(ctx, "starter_pack_granted", fid, evt_payload, None);
+
+    let hold_until = now + HOLD_DAYS * 24 * 60 * 60 * 1000;
+    for p in payload.players.iter() {
+        let items = ctx.db().inventory_item();
+        if items.item_id().find(&p.player_id).is_some() { items.item_id().delete(&p.player_id); }
+        items.insert(InventoryItem { item_id: p.player_id.clone(), owner_fid: fid, item_type: "player".into(), acquired_at_ms: now, hold_until_ms: hold_until, source_event_id: evt.id.clone() });
+    }
+    push_inbox(ctx, fid, format!("starter-{}", evt.id), "starter_pack", "Starter Pack Granted", &format!("You received {} players from starter pack.", payload.players.len()));
  }
  
  #[reducer]

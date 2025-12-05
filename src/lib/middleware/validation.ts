@@ -29,6 +29,9 @@ export const verifyStarterSchema = z.object({
 export const adminGrantStarterSchema = z.object({
   fid: z.number().int().positive(),
   wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  // Gasless admin verification (signature over a message)
+  signature: z.string().regex(/^0x[a-fA-F0-9]+$/).optional(),
+  message: z.string().min(1).optional(),
 });
 
 // ========== MARKETPLACE ==========

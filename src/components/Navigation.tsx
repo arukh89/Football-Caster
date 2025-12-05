@@ -27,7 +27,10 @@ export function Navigation(): JSX.Element {
   const [open, setOpen] = React.useState(false);
   const { identity } = useFarcasterIdentity();
   const { wallet } = useWallet();
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
   const isAdmin = (identity?.fid === DEV_FID) || ((wallet.address || '').toLowerCase() === CONTRACT_ADDRESSES.treasury.toLowerCase());
+  const showAdmin = mounted && isAdmin;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden" role="navigation" aria-label="Primary">
@@ -69,7 +72,7 @@ export function Navigation(): JSX.Element {
                 </Link>
               );
             })}
-            {isAdmin && (
+            {showAdmin && (
               <Link
                 href="/admin"
                 onClick={() => setOpen(false)}
@@ -97,7 +100,10 @@ export function DesktopNav(): JSX.Element {
   const pathname = usePathname();
   const { identity } = useFarcasterIdentity();
   const { wallet } = useWallet();
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
   const isAdmin = (identity?.fid === DEV_FID) || ((wallet.address || '').toLowerCase() === CONTRACT_ADDRESSES.treasury.toLowerCase());
+  const showAdmin = mounted && isAdmin;
   async function checkInbox(): Promise<void> {
     try {
       const res = await fetch('/api/inbox?unread=true', { cache: 'no-store' });
@@ -146,7 +152,7 @@ export function DesktopNav(): JSX.Element {
           <Button variant="outline" className="gap-2" onClick={() => void checkInbox()} aria-label="Check Inbox">
             <RefreshCw className="h-4 w-4" /> Check Inbox
           </Button>
-          {isAdmin && (
+          {showAdmin && (
             <Link
               href="/admin"
               className={cn(

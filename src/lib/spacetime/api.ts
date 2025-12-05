@@ -24,6 +24,28 @@ async function getReducer(name: string): Promise<(...args: any[]) => Promise<any
   throw new Error(`Reducer ${name} not available`);
 }
 
+function toCamelCase(name: string): string {
+  return name.replace(/[_-](\w)/g, (_, c) => c.toUpperCase());
+}
+
+async function callReducerCompat(nameSnake: string, argsPositional: any[], argsNamed: Record<string, any>): Promise<any> {
+  const r: any = await reducers();
+  const camel = toCamelCase(nameSnake);
+  if (typeof r?.[camel] === 'function') {
+    const i64Keys = new Set([
+      'fid', 'buyerFid', 'sellerFid', 'winnerFid', 'challengerFid', 'challengedFid', 'accepterFid', 'reporterFid', 'durationSeconds'
+    ]);
+    const transformed = Object.fromEntries(Object.entries(argsNamed).map(([k, v]) => {
+      if (i64Keys.has(k) && typeof v === 'number' && Number.isInteger(v)) return [k, BigInt(v)];
+      return [k, v];
+    }));
+    return r[camel](transformed);
+  }
+  if (typeof r?.[nameSnake] === 'function') return r[nameSnake](...argsPositional);
+  if (typeof r?.call === 'function') return r.call(nameSnake, ...argsPositional);
+  throw new Error(`Reducer ${nameSnake} not available`);
+}
+
 export async function stGetPlayersMine(fid: number): Promise<Player[]> {
   const st = await getSpacetime();
   const fidBig = BigInt(fid);
@@ -149,8 +171,8 @@ export async function stHasEnteredBefore(fid: number): Promise<boolean> {
 }
 
 export async function stGrantStarterPack(fid: number, players: any[]): Promise<void> {
-  const fn = await getReducer('grant_starter_pack');
-  await fn(fid, JSON.stringify({ players }));
+  const playersJson = JSON.stringify({ players });
+  await callReducerCompat('grant_starter_pack', [fid, playersJson], { fid, playersJson });
 }
 
 export async function stCreateListing(fid: number, itemId: string, priceFbcWei: string): Promise<any> {
@@ -251,8 +273,7 @@ export async function stGetAuction(auctionId: string): Promise<any | null> {
 }
 
 export async function stLinkWallet(fid: number, address: string): Promise<void> {
-  const r = await reducers();
-  await r.link_wallet(fid, address);
+  await callReducerCompat('link_wallet', [fid, address], { fid, address });
 }
 
 export async function stGetInbox(fid: number): Promise<any[]> {

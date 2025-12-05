@@ -1,6 +1,6 @@
 // Core constants for Football Caster
 
-export const DEV_FID = 250704;
+export const DEV_FID: number = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
 
 export const CHAIN_CONFIG = {
   chainId: 8453, // Base mainnet

@@ -159,9 +159,15 @@ export default function HomePage(): JSX.Element {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link href="/match" aria-label="Watch match">
-                    <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10" aria-label="Watch match button">
-                      ⚽ Watch Match
+                  <Link href="/match?mode=ai" aria-label="Play vs AI">
+                    <Button size="lg" className="gap-2 h-14 text-lg championship-button" aria-label="Play vs AI">
+                      🤖 Play vs AI
+                      <ArrowRight className="h-5 w-5" />
+                    </Button>
+                  </Link>
+                  <Link href="/match?mode=pvp" aria-label="Play PvP">
+                    <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10" aria-label="Play PvP">
+                      🆚 Play PvP
                       <ArrowRight className="h-5 w-5" />
                     </Button>
                   </Link>
@@ -178,12 +184,20 @@ export default function HomePage(): JSX.Element {
                     <ArrowRight className="h-5 w-5" />
                   </Button>
                 ) : (
-                  <Link href="/match" aria-label="Watch match">
-                    <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10">
-                      ⚽ Watch Match
-                      <ArrowRight className="h-5 w-5" />
-                    </Button>
-                  </Link>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Link href="/match?mode=ai" aria-label="Play vs AI">
+                      <Button size="lg" className="gap-2 h-14 text-lg championship-button">
+                        🤖 Play vs AI
+                        <ArrowRight className="h-5 w-5" />
+                      </Button>
+                    </Link>
+                    <Link href="/match?mode=pvp" aria-label="Play PvP">
+                      <Button size="lg" variant="outline" className="gap-2 h-14 text-lg border-2 border-emerald-500/30 hover:bg-emerald-500/10">
+                        🆚 Play PvP
+                        <ArrowRight className="h-5 w-5" />
+                      </Button>
+                    </Link>
+                  </div>
                 )}
               </div>
             )}

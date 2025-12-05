@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Play, Pause, SkipForward, Trophy, Activity, Cloud, CloudRain, CloudSnow, Wind, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,17 @@ export default function MatchPage(): JSX.Element {
   const [currentMatchStatus, setCurrentMatchStatus] = useState<'pending' | 'active' | 'finalized' | null>(null);
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [mode, setMode] = useState<'pvp' | 'ai'>(() => (typeof window !== 'undefined' && (localStorage.getItem('match_mode') as 'pvp' | 'ai')) || 'pvp');
+  const search = useSearchParams();
+  const [mode, setMode] = useState<'pvp' | 'ai'>(() => {
+    if (typeof window !== 'undefined') {
+      const qp = new URLSearchParams(window.location.search);
+      const m = qp.get('mode');
+      if (m === 'ai' || m === 'pvp') return m;
+      const saved = localStorage.getItem('match_mode') as 'pvp' | 'ai' | null;
+      if (saved === 'ai' || saved === 'pvp') return saved;
+    }
+    return 'pvp';
+  });
   const [simulator, setSimulator] = useState<MatchSimulator | null>(null);
   const [matchState, setMatchState] = useState<MatchState | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -306,6 +317,11 @@ export default function MatchPage(): JSX.Element {
                 <Button size="sm" variant={mode === 'pvp' ? 'default' : 'outline'} onClick={() => setMode('pvp')}>PvP</Button>
                 <Button size="sm" variant={mode === 'ai' ? 'default' : 'outline'} onClick={() => setMode('ai')}>AI</Button>
               </div>
+              {mode === 'ai' && (
+                <div className="text-xs px-2 py-1 rounded bg-emerald-500/10 text-emerald-600">
+                  AI mode (offline, no PvP)
+                </div>
+              )}
               <Button size="sm" variant="outline" onClick={() => void pollCurrent()} disabled={mode !== 'pvp'}>
                 Refresh status
               </Button>

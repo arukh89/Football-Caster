@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { GlassCard } from '@/components/glass/GlassCard';
+import { Navigation, DesktopNav } from '@/components/Navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -72,39 +73,59 @@ export default function AdminPage(): JSX.Element {
     }
   };
 
-  if (loading) return <div className="container mx-auto p-4">Loading...</div>;
+  if (loading) return (
+    <>
+      <DesktopNav />
+      <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
+        <div className="container mx-auto p-4">Loading...</div>
+      </div>
+      <Navigation />
+    </>
+  );
   if (!isAdmin) return (
-    <div className="container mx-auto p-4">
-      <GlassCard className="p-4">
-        <div className="font-bold mb-2">Admin</div>
-        <div className="text-sm text-muted-foreground">Forbidden</div>
-      </GlassCard>
-    </div>
+    <>
+      <DesktopNav />
+      <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
+        <div className="container mx-auto p-4">
+          <GlassCard className="p-4">
+            <div className="font-bold mb-2">Admin</div>
+            <div className="text-sm text-muted-foreground">Forbidden</div>
+          </GlassCard>
+        </div>
+      </div>
+      <Navigation />
+    </>
   );
 
   return (
-    <div className="container mx-auto p-4 max-w-xl">
-      <GlassCard className="p-4">
-        <div className="font-bold text-lg mb-4">Grant Starter Pack (Admin)</div>
+    <>
+      <DesktopNav />
+      <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8">
+        <div className="container mx-auto p-4 max-w-xl">
+          <GlassCard className="p-4">
+            <div className="font-bold text-lg mb-4">Grant Starter Pack (Admin)</div>
 
-        <div className="space-y-3">
-          <div className="grid gap-1">
-            <Label htmlFor="fid">Target FID</Label>
-            <Input id="fid" placeholder="e.g. 123456" value={targetFid} onChange={(e) => setTargetFid(e.target.value)} />
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="wallet">Target Wallet (optional)</Label>
-            <Input id="wallet" placeholder="0x... (optional)" value={targetWallet} onChange={(e) => setTargetWallet(e.target.value)} />
-          </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-          {result && <div className="text-sm text-green-600">{result}</div>}
-          <div className="pt-2">
-            <Button onClick={onGrant} disabled={submitting} className="championship-button">
-              {submitting ? 'Granting...' : 'Grant Starter Pack'}
-            </Button>
-          </div>
+            <div className="space-y-3">
+              <div className="grid gap-1">
+                <Label htmlFor="fid">Target FID</Label>
+                <Input id="fid" placeholder="e.g. 123456" value={targetFid} onChange={(e) => setTargetFid(e.target.value)} />
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="wallet">Target Wallet (optional)</Label>
+                <Input id="wallet" placeholder="0x... (optional)" value={targetWallet} onChange={(e) => setTargetWallet(e.target.value)} />
+              </div>
+              {error && <div className="text-sm text-red-500">{error}</div>}
+              {result && <div className="text-sm text-green-600">{result}</div>}
+              <div className="pt-2">
+                <Button onClick={onGrant} disabled={submitting} className="championship-button">
+                  {submitting ? 'Granting...' : 'Grant Starter Pack'}
+                </Button>
+              </div>
+            </div>
+          </GlassCard>
         </div>
-      </GlassCard>
-    </div>
+      </div>
+      <Navigation />
+    </>
   );
 }

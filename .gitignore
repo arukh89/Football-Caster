@@ -5,6 +5,7 @@ node_modules/
 .turbo/
 coverage/
 pnpm-debug.log*
+*.log
 tsconfig.tsbuildinfo
 .env*
 .DS_Store
