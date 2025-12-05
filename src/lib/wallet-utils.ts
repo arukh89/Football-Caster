@@ -1,10 +1,14 @@
 import type { WalletClient, PublicClient } from 'viem';
 import { parseUnits, formatUnits } from 'viem';
-import { readContract, waitForTransactionReceipt } from 'viem/actions';
+import { readContract, waitForTransactionReceipt, simulateContract } from 'viem/actions';
 import { base } from 'viem/chains';
 import { CONTRACT_ADDRESSES } from './constants';
 import { sendTx } from '@/lib/onchain/sendTx';
 const OX_QUOTE_URL = '/api/zeroex/quote';
+const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
+const UNISWAP_V3_QUOTER_V2: `0x${string}` = '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a';
+const UNISWAP_V3_SWAP_ROUTER_02: `0x${string}` = '0x2626664c2603336E57B271c5C0b26F421741e481';
+const V3_FEE_TIERS: number[] = [500, 3000, 10000, 100];
 
 // ERC20 ABI for approve and transfer functions
 const ERC20_ABI = [
@@ -141,9 +145,121 @@ export async function payInFBC(
         });
         await waitForTransactionReceipt(publicClient, { hash: swapHash });
       } catch (swapErr) {
+        // Fallback: try Uniswap v3 SwapRouter02 direct swap (ETH -> WETH -> FBC) exactOutputSingle
+        try {
+          const amountOut = missing;
+          let best: { fee: number; amountIn: bigint } | null = null;
+
+          // Minimal ABI for QuoterV2.quoteExactOutputSingle
+          const QUOTER_ABI = [
+            {
+              name: 'quoteExactOutputSingle',
+              type: 'function',
+              stateMutability: 'nonpayable',
+              inputs: [{
+                components: [
+                  { name: 'tokenIn', type: 'address' },
+                  { name: 'tokenOut', type: 'address' },
+                  { name: 'amount', type: 'uint256' },
+                  { name: 'fee', type: 'uint24' },
+                  { name: 'sqrtPriceLimitX96', type: 'uint160' },
+                ],
+                name: 'params',
+                type: 'tuple'
+              }],
+              outputs: [
+                { name: 'amountIn', type: 'uint256' },
+                { name: 'sqrtPriceX96After', type: 'uint160' },
+                { name: 'initializedTicksCrossed', type: 'uint32' },
+                { name: 'gasEstimate', type: 'uint256' },
+              ],
+            },
+          ] as const;
+
+          for (const fee of V3_FEE_TIERS) {
+            try {
+              const res: any = await readContract(publicClient, {
+                address: UNISWAP_V3_QUOTER_V2,
+                abi: QUOTER_ABI as any,
+                functionName: 'quoteExactOutputSingle',
+                args: [{ tokenIn: WETH_BASE, tokenOut: CONTRACT_ADDRESSES.fbc, amount: amountOut, fee, sqrtPriceLimitX96: 0n }],
+              });
+              const amountIn = BigInt(res?.[0] ?? res?.amountIn ?? '0');
+              if (amountIn > 0n && (!best || amountIn < best.amountIn)) {
+                best = { fee, amountIn };
+              }
+            } catch {}
+          }
+
+          if (!best) throw new Error('No viable Uniswap v3 pool for WETH→FBC');
+
+          const amountInMax = (best.amountIn * 102n) / 100n; // +2% slippage
+          const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+
+          // Minimal ABI for SwapRouter02.exactOutputSingle
+          const ROUTER_ABI = [
+            {
+              name: 'exactOutputSingle',
+              type: 'function',
+              stateMutability: 'payable',
+              inputs: [{
+                components: [
+                  { name: 'tokenIn', type: 'address' },
+                  { name: 'tokenOut', type: 'address' },
+                  { name: 'fee', type: 'uint24' },
+                  { name: 'recipient', type: 'address' },
+                  { name: 'deadline', type: 'uint256' },
+                  { name: 'amountOut', type: 'uint256' },
+                  { name: 'amountInMaximum', type: 'uint256' },
+                  { name: 'sqrtPriceLimitX96', type: 'uint160' },
+                ],
+                name: 'params',
+                type: 'tuple'
+              }],
+              outputs: [ { name: 'amountIn', type: 'uint256' } ],
+            },
+          ] as const;
+
+          const params = {
+            tokenIn: WETH_BASE,
+            tokenOut: CONTRACT_ADDRESSES.fbc,
+            fee: best.fee,
+            recipient: account,
+            deadline,
+            amountOut,
+            amountInMaximum: amountInMax,
+            sqrtPriceLimitX96: 0n,
+          } as const;
+
+          // Simulate first
+          await simulateContract(publicClient, {
+            address: UNISWAP_V3_SWAP_ROUTER_02,
+            abi: ROUTER_ABI as any,
+            functionName: 'exactOutputSingle',
+            args: [params],
+            value: amountInMax,
+            account,
+          });
+
+          // Execute
+          const swapHash = await walletClient.writeContract({
+            address: UNISWAP_V3_SWAP_ROUTER_02,
+            abi: ROUTER_ABI as any,
+            functionName: 'exactOutputSingle',
+            args: [params],
+            value: amountInMax,
+            account,
+            chain: base,
+          });
+          await waitForTransactionReceipt(publicClient, { hash: swapHash });
+        } catch (uniErr) {
+          const have = formatUnits(balance, 18);
+          const need = formatUnits(amountBigInt, 18);
+          throw new Error(`Insufficient FBC balance. You have ${have}, need ${need}. Autoswap failed: ${(swapErr as Error).message}; Uniswap v3 fallback failed: ${(uniErr as Error).message}`);
+        }
         const have = formatUnits(balance, 18);
         const need = formatUnits(amountBigInt, 18);
-        throw new Error(`Insufficient FBC balance. You have ${have}, need ${need}. Autoswap failed: ${(swapErr as Error).message}`);
+        // If we reached here, Uniswap swap succeeded; continue
       }
 
       // Re-check balance after swap
