@@ -243,6 +243,23 @@ export async function stBuyNow(auctionId: string, buyerFid: number, buyNowFbcWei
   await r.buy_now(auctionId, buyerFid, buyNowFbcWei);
 }
 
+// Atomic purchase flows (idempotent, single-reducer)
+export async function stMarketplacePurchaseApply(txHash: string, buyerFid: number, listingId: string): Promise<void> {
+  await callReducerCompat(
+    'marketplace_purchase_apply',
+    [txHash, buyerFid, listingId, '/api/market/buy'],
+    { txHash, buyerFid, listingId, endpoint: '/api/market/buy' }
+  );
+}
+
+export async function stAuctionBuyNowApply(txHash: string, buyerFid: number, auctionId: string, buyNowFbcWei: string): Promise<void> {
+  await callReducerCompat(
+    'auction_buy_now_apply',
+    [txHash, buyerFid, auctionId, buyNowFbcWei, '/api/auctions/buy-now'],
+    { txHash, buyerFid, auctionId, buyNowWei: buyNowFbcWei, endpoint: '/api/auctions/buy-now' }
+  );
+}
+
 export async function stFinalizeAuction(auctionId: string, winnerFid: number): Promise<void> {
   const r = await reducers();
   await r.finalize_auction(auctionId, winnerFid);
