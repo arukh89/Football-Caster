@@ -66,7 +66,12 @@ export class SpacetimeClientBuilder {
             if (typeof builder.withDatabaseName === 'function') return builder.withDatabaseName(this._dbName);
             if (typeof builder.withDatabaseId === 'function') return builder.withDatabaseId(this._dbName);
             if (typeof builder.withIdentity === 'function') return builder.withIdentity(this._dbName);
-            // Fall back to connect() path below if identity methods are unavailable
+            // Fall back to module name when identity setters are unavailable
+            const moduleName = sanitize(
+              env.SPACETIME_MODULE || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME,
+              'footballcaster2'
+            );
+            if (typeof builder.withModuleName === 'function') return builder.withModuleName(moduleName);
             return null;
           }
           // Module name path
