@@ -10,5 +10,8 @@ tsconfig.tsbuildinfo
 .env*
 .DS_Store
 
+# Reports / Artifacts
+reliability-droid-report.html
+
 # Rust
 spacetime-server/rust/**/target/
