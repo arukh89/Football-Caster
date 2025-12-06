@@ -359,6 +359,19 @@ export async function stNpcCreate(
   await callReducerCompat('npc_create', [npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson], {
     npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson,
   });
+  // Verify write for reliability in dev
+  try {
+    const st = await getSpacetime();
+    const exists = !!st.db.npcRegistry?.npcFid?.()?.find?.(BigInt(npcFid));
+    if (!exists) {
+      throw new Error('npc_create_noop');
+    }
+  } catch (_) {
+    // fallback to scan
+    const st = await getSpacetime();
+    const ok = Array.from(st.db.npcRegistry.iter?.() ?? []).some((n: any) => Number(n.npcFid) === npcFid);
+    if (!ok) throw new Error('npc_create_noop');
+  }
 }
 
 export async function stNpcMintToken(npcFid: number, ownerFid: number): Promise<void> {
