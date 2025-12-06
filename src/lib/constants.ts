@@ -153,3 +153,8 @@ export const API_ENDPOINTS = {
     quote: '/api/pricing/quote',
   },
 } as const;
+
+// Helpers for building dynamic API paths safely
+export function auctionInfoPath(id: string): string {
+  return `/api/auctions/${id}/info`;
+}

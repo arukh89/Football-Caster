@@ -14,7 +14,7 @@ import PullToRefresh from '@/components/PullToRefresh';
 // Snapshots removed
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import type { Auction } from '@/lib/types';
-import { API_ENDPOINTS } from '@/lib/constants';
+import { API_ENDPOINTS, auctionInfoPath } from '@/lib/constants';
 import { useWallet } from '@/hooks/useWallet';
 import { payInFBC } from '@/lib/wallet-utils';
 
@@ -73,7 +73,7 @@ export default function AuctionPage(): React.JSX.Element {
       }
 
       // Fetch payment target
-      const infoRes = await fetch(API_ENDPOINTS.auction.info.replace('[id]', auction.id), { cache: 'no-store' });
+      const infoRes = await fetch(auctionInfoPath(auction.id), { cache: 'no-store' });
       const info = await infoRes.json();
       if (!infoRes.ok) throw new Error(info.error || 'Failed to fetch buy-now info');
 

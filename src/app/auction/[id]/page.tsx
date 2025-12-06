@@ -12,7 +12,7 @@ import { AuctionTimer } from '@/components/glass/AuctionTimer';
 import { PriceTag } from '@/components/glass/PriceTag';
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import { useWallet } from '@/hooks/useWallet';
-import { API_ENDPOINTS } from '@/lib/constants';
+import { API_ENDPOINTS, auctionInfoPath } from '@/lib/constants';
 import { payInFBC, formatFBC } from '@/lib/wallet-utils';
 import { ChevronLeft, Gavel, ShoppingCart, Plus } from 'lucide-react';
 import { createConfig } from 'wagmi';
@@ -54,7 +54,7 @@ export default function AuctionDetailPage(): React.JSX.Element {
   const fetchAuction = async (): Promise<void> => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_ENDPOINTS.auction.info}`.replace('[id]', id as string));
+      const res = await fetch(auctionInfoPath(id as string));
       if (!res.ok) throw new Error('Failed to fetch auction');
       const data = await res.json();
       setAuction(data.auction);
