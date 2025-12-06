@@ -2,6 +2,7 @@
   "miniapp": {
     "name": "Football-Caster",
     "version": "1",
+    "imageUrl": "https://football-caster-new.vercel.app/icon.png",
     "iconUrl": "https://football-caster-new.vercel.app/icon.png",
     "homeUrl": "https://football-caster-new.vercel.app",
     "buttonTitle": "Open App",
@@ -11,7 +12,7 @@
     "description": "Build your dream team on Base. Trade players, compete, and dominate the leaderboard.",
     "primaryCategory": "games",
     "tags": ["game","social","community"],
-    "tagline": "Build your squad. Trade. Compete.",
+    "tagline": "Build. Trade. Compete.",
     "ogDescription": "Build your Squad, train, play P2P and VS AI"
   },
   "accountAssociation": {
