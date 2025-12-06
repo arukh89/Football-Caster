@@ -5,7 +5,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stGetListing, stGetUser, stCloseListingAndTransfer, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
+import { stGetListing, stGetUser, stCloseListingAndTransfer, stIsTxUsed, stMarkTxUsed, stMarketplacePurchaseApply } from '@/lib/spacetime/api';
 import { verifyFBCTransferExact } from '@/lib/services/verification';
 import { validate, buyListingSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
@@ -65,11 +65,15 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       );
     }
 
-    // Mark transaction as used to prevent replay
-    await stMarkTxUsed(txHash, fid, '/api/market/buy');
-
-    // Close listing and transfer via reducer (handles inbox + events)
-    await stCloseListingAndTransfer(listingId, fid);
+    const useAtomic = process.env.ENABLE_ATOMIC_PURCHASE === 'true';
+    if (useAtomic) {
+      // Single atomic reducer ensures idempotency
+      await stMarketplacePurchaseApply(txHash, fid, listingId);
+    } else {
+      // Legacy 2-step flow
+      await stMarkTxUsed(txHash, fid, '/api/market/buy');
+      await stCloseListingAndTransfer(listingId, fid);
+    }
 
     return NextResponse.json({ success: true, itemId: listing.itemId });
   } catch (error) {

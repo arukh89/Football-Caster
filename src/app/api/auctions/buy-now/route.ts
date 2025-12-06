@@ -5,7 +5,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stGetAuction, stGetUser, stBuyNow, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
+import { stGetAuction, stGetUser, stBuyNow, stIsTxUsed, stMarkTxUsed, stAuctionBuyNowApply } from '@/lib/spacetime/api';
 import { verifyFBCTransferExact } from '@/lib/services/verification';
 import { validate, buyNowAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
@@ -69,11 +69,14 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       );
     }
 
-    // Mark transaction as used to prevent replay
-    await stMarkTxUsed(txHash, fid, '/api/auctions/buy-now');
-
-    // Perform buy-now via reducer (handles finalize + transfer)
-    await stBuyNow(auctionId, fid, auction.buyNowFbcWei);
+    const useAtomic = process.env.ENABLE_ATOMIC_PURCHASE === 'true';
+    if (useAtomic) {
+      await stAuctionBuyNowApply(txHash, fid, auctionId, auction.buyNowFbcWei);
+    } else {
+      // Legacy 2-step flow
+      await stMarkTxUsed(txHash, fid, '/api/auctions/buy-now');
+      await stBuyNow(auctionId, fid, auction.buyNowFbcWei);
+    }
 
     return NextResponse.json({ success: true, status: 'buy_now', auctionId });
   } catch (error) {
