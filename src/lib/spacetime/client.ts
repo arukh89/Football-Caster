@@ -59,31 +59,17 @@ export class SpacetimeClientBuilder {
       const Gen: any = await import('@/spacetime_module_bindings');
       if (Gen?.DbConnection?.builder) {
         console.info('[STDB] Using generated bindings DbConnection.builder()');
-        const b = Gen.DbConnection.builder().withUri(this._uri);
-        // Prefer identity when the value looks like a DB identity
-        const setDb = (builder: any) => {
-          if (isIdentity) {
-            if (typeof builder.withDatabaseName === 'function') return builder.withDatabaseName(this._dbName);
-            if (typeof builder.withDatabaseId === 'function') return builder.withDatabaseId(this._dbName);
-            if (typeof builder.withIdentity === 'function') return builder.withIdentity(this._dbName);
-            // Fall back to module name when identity setters are unavailable
-            const moduleName = sanitize(
-              env.SPACETIME_MODULE || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME,
-              'footballcaster2'
-            );
-            if (typeof builder.withModuleName === 'function') return builder.withModuleName(moduleName);
-            return null;
-          }
-          // Module name path
-          if (typeof builder.withModuleName === 'function') return builder.withModuleName(this._dbName);
-          return null;
-        };
-        const configured = setDb(b);
-        if (configured) {
-          const conn = configured.build();
-          return conn;
-        }
-        // If we couldn't configure via builder (e.g., identity without a matching setter), fall through to generic connect()
+        // Always connect by module name for stability across SDK versions
+        const moduleName = sanitize(
+          env.SPACETIME_MODULE || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || this._dbName,
+          'footballcaster2'
+        );
+        const conn = Gen.DbConnection
+          .builder()
+          .withUri(this._uri)
+          .withModuleName(moduleName)
+          .build();
+        return conn;
       }
     } catch {}
 
