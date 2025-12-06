@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { sdk } from '@farcaster/miniapp-sdk';
 
 export function useIsInFarcaster(): boolean {
   const [isIn, setIsIn] = useState(false);
@@ -18,13 +17,7 @@ export function useIsInFarcaster(): boolean {
       const refHints = /warpcast\.com|farcaster/i.test(referrer);
       const qsHints = /fc_context|miniapp|warplet/i.test(qs);
 
-      // If SDK is available, try reading context synchronously best-effort
-      let sdkHint = false;
-      try {
-        sdkHint = !!sdk; // presence of SDK import
-      } catch {}
-
-      setIsIn(embeddedGlobals || uaHints || refHints || qsHints || sdkHint);
+      setIsIn(embeddedGlobals || uaHints || refHints || qsHints);
     } catch {
       setIsIn(false);
     }
