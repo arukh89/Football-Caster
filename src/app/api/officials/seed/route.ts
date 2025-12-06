@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/middleware/auth'
+import type { AuthContext } from '@/lib/middleware/auth'
 import { stOfficialCreate } from '@/lib/spacetime/api'
 
 export const runtime = 'nodejs'
@@ -26,7 +27,7 @@ async function tryCreate(role: string) {
   }
 }
 
-async function handler(req: NextRequest): Promise<Response> {
+async function handler(req: NextRequest, _ctx: AuthContext): Promise<Response> {
   try {
     const countParam = Number((await req.json().catch(() => ({})))?.count ?? 4)
     const wantsVar = countParam >= 4

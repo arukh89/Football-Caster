@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/middleware/auth'
+import type { AuthContext } from '@/lib/middleware/auth'
 import { stOfficialSetActive } from '@/lib/spacetime/api'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-async function handler(req: NextRequest): Promise<Response> {
+async function handler(req: NextRequest, _ctx: AuthContext): Promise<Response> {
   try {
     const body = await req.json().catch(() => ({})) as any
     const officialId = String(body?.officialId || '')
