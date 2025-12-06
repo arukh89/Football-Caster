@@ -51,17 +51,26 @@ export class SpacetimeClientBuilder {
   token(v: string): this { this._token = v; return this; }
 
   async connect(): Promise<any> {
+    // Helper: decide whether the provided DB name is an identity (64 hex chars)
+    const isIdentity = /^[0-9a-f]{64}$/i.test(this._dbName);
+
     // 1) Try generated bindings via direct import (works with Next.js path alias)
     try {
       const Gen: any = await import('@/spacetime_module_bindings');
       if (Gen?.DbConnection?.builder) {
         console.info('[STDB] Using generated bindings DbConnection.builder()');
-        const conn = Gen.DbConnection
-          .builder()
-          .withUri(this._uri)
-          .withModuleName(this._dbName)
-          .build();
-        return conn;
+        const builder = Gen.DbConnection.builder().withUri(this._uri);
+        // Prefer identity when provided and supported by SDK
+        if (isIdentity) {
+          if (typeof builder.withDatabaseName === 'function') return builder.withDatabaseName(this._dbName).build();
+          if (typeof builder.withDatabaseId === 'function') return builder.withDatabaseId(this._dbName).build();
+          if (typeof builder.withIdentity === 'function') return builder.withIdentity(this._dbName).build();
+        }
+        const moduleName = sanitize(
+          env.SPACETIME_MODULE || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || this._dbName,
+          'footballcaster2'
+        );
+        if (typeof builder.withModuleName === 'function') return builder.withModuleName(moduleName).build();
       }
     } catch {}
 
@@ -79,6 +88,7 @@ export class SpacetimeClientBuilder {
     const connect = (mod as any).connect ?? (mod as any).default?.connect;
     if (typeof connect === 'function') {
       console.info('[STDB] Using spacetimedb.connect()');
+      // connect(uri, nameOrIdentity) works with either module name or identity depending on server
       return await connect(this._uri, this._dbName);
     }
 
@@ -91,10 +101,16 @@ export class SpacetimeClientBuilder {
 
       if (typeof builderFn === 'function') {
         console.info('[STDB] Using SDK builder() fallback');
-        const conn = builderFn()
-          .withUri(this._uri)
-          .withModuleName(this._dbName)
-          .build();
+        let b = builderFn().withUri(this._uri);
+        if (isIdentity) {
+          if (typeof b.withDatabaseName === 'function') b = b.withDatabaseName(this._dbName);
+          else if (typeof b.withDatabaseId === 'function') b = b.withDatabaseId(this._dbName);
+          else if (typeof b.withIdentity === 'function') b = b.withIdentity(this._dbName);
+          else b = b; // no-op, will likely fail below
+        } else if (typeof b.withModuleName === 'function') {
+          b = b.withModuleName(this._dbName);
+        }
+        const conn = b.build?.();
         if (conn) return conn;
       }
     } catch {}
