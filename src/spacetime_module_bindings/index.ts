@@ -31,6 +31,8 @@ import {
 } from "spacetimedb";
 
 // Import and reexport all reducer arg types
+import AuctionBuyNowApply from "./auction_buy_now_apply_reducer";
+export { AuctionBuyNowApply };
 import BuyNow from "./buy_now_reducer";
 export { BuyNow };
 import CloseListingAndTransfer from "./close_listing_and_transfer_reducer";
@@ -51,6 +53,8 @@ import LinkWallet from "./link_wallet_reducer";
 export { LinkWallet };
 import MarkTxUsed from "./mark_tx_used_reducer";
 export { MarkTxUsed };
+import MarketplacePurchaseApply from "./marketplace_purchase_apply_reducer";
+export { MarketplacePurchaseApply };
 import NpcAssignForUser from "./npc_assign_for_user_reducer";
 export { NpcAssignForUser };
 import NpcCreate from "./npc_create_reducer";
@@ -63,6 +67,8 @@ import OfficialAssignToMatch from "./official_assign_to_match_reducer";
 export { OfficialAssignToMatch };
 import OfficialCreate from "./official_create_reducer";
 export { OfficialCreate };
+import OfficialSetActive from "./official_set_active_reducer";
+export { OfficialSetActive };
 import OfficialUpdateAfterMatch from "./official_update_after_match_reducer";
 export { OfficialUpdateAfterMatch };
 import PlaceBid from "./place_bid_reducer";
@@ -381,6 +387,7 @@ const tablesSchema = __schema(
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("auction_buy_now_apply", AuctionBuyNowApply),
   __reducerSchema("buy_now", BuyNow),
   __reducerSchema("close_listing_and_transfer", CloseListingAndTransfer),
   __reducerSchema("commentary_append", CommentaryAppend),
@@ -391,12 +398,14 @@ const reducersSchema = __reducers(
   __reducerSchema("inbox_mark_read", InboxMarkRead),
   __reducerSchema("link_wallet", LinkWallet),
   __reducerSchema("mark_tx_used", MarkTxUsed),
+  __reducerSchema("marketplace_purchase_apply", MarketplacePurchaseApply),
   __reducerSchema("npc_assign_for_user", NpcAssignForUser),
   __reducerSchema("npc_create", NpcCreate),
   __reducerSchema("npc_mint_token", NpcMintToken),
   __reducerSchema("npc_update_state", NpcUpdateState),
   __reducerSchema("official_assign_to_match", OfficialAssignToMatch),
   __reducerSchema("official_create", OfficialCreate),
+  __reducerSchema("official_set_active", OfficialSetActive),
   __reducerSchema("official_update_after_match", OfficialUpdateAfterMatch),
   __reducerSchema("place_bid", PlaceBid),
   __reducerSchema("player_age_tick", PlayerAgeTick),

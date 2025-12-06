@@ -2,8 +2,14 @@
 
 export const DEV_FID: number = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
 
+const envChainId = (() => {
+  const raw = (process.env.NEXT_PUBLIC_CHAIN_ID || process.env.CHAIN_ID || '').trim();
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 8453; // default Base mainnet
+})();
+
 export const CHAIN_CONFIG = {
-  chainId: 8453, // Base mainnet
+  chainId: envChainId,
   name: 'Base',
   rpcUrl: process.env.NEXT_PUBLIC_BASE_RPC_URL || process.env.BASE_RPC_URL || 'https://mainnet.base.org',
 } as const;
