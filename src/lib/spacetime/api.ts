@@ -33,7 +33,11 @@ async function callReducerCompat(nameSnake: string, argsPositional: any[], argsN
   const camel = toCamelCase(nameSnake);
   if (typeof r?.[camel] === 'function') {
     const i64Keys = new Set([
-      'fid', 'buyerFid', 'sellerFid', 'winnerFid', 'challengerFid', 'challengedFid', 'accepterFid', 'reporterFid', 'durationSeconds'
+      'fid', 'buyerFid', 'sellerFid', 'winnerFid', 'challengerFid', 'challengedFid', 'accepterFid', 'reporterFid',
+      // NPC & squad related
+      'npcFid', 'userFid', 'aiSeed', 'sourceFid', 'followers', 'ownerFid',
+      // Misc durations that some reducers model as i64
+      'durationSeconds', 'nextDecisionAtMs', 'tsMs'
     ]);
     const transformed = Object.fromEntries(Object.entries(argsNamed).map(([k, v]) => {
       if (i64Keys.has(k) && typeof v === 'number' && Number.isInteger(v)) return [k, BigInt(v)];
