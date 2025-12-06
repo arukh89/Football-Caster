@@ -8,8 +8,16 @@ export function useIsInFarcaster(): boolean {
   useEffect(() => {
     try {
       const referrer = typeof document !== 'undefined' ? document.referrer : '';
-      const embedded = typeof window !== 'undefined' && !!(window as any).farcaster;
-      setIsIn(/warpcast\.com/.test(referrer) || embedded);
+      const win: any = typeof window !== 'undefined' ? window : undefined;
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const qs = typeof window !== 'undefined' ? window.location.search : '';
+
+      const embeddedGlobals = !!(win?.farcaster || win?.warpcast);
+      const uaHints = /Warpcast|Farcaster/i.test(ua);
+      const refHints = /warpcast\.com|farcaster/i.test(referrer);
+      const qsHints = /fc_context|miniapp|warplet/i.test(qs);
+
+      setIsIn(embeddedGlobals || uaHints || refHints || qsHints);
     } catch {
       setIsIn(false);
     }

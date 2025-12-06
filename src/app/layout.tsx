@@ -44,6 +44,7 @@ export const metadata: Metadata = {
     "fc:miniapp:manifest": "/.well-known/farcaster.json",
     "fc:miniapp": JSON.stringify({
       version: "1",
+      imageUrl: "https://football-caster-new.vercel.app/icon.png",
       button: {
         title: "Open App",
         action: {

@@ -55,8 +55,9 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
       }
       return { fid, wallet };
     } catch (error) {
-      // Only allow explicit dev fallback when enabled
-      if (process.env.ENABLE_DEV_FALLBACK === 'true') {
+      // Only allow dev fallback in non-production when enabled (default true in development)
+      const devFallbackEnabled = process.env.NODE_ENV !== 'production' && (process.env.ENABLE_DEV_FALLBACK !== 'false');
+      if (devFallbackEnabled) {
         const [fidStr, wallet] = token.split(':');
         const fidNum = parseInt(fidStr || '', 10);
         if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
@@ -72,8 +73,8 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
     return null;
   }
   
-  // Dev fallback - only with explicit flag
-  if (process.env.ENABLE_DEV_FALLBACK === 'true') {
+  // Dev fallback - enabled by default in development (can be disabled with ENABLE_DEV_FALLBACK=false)
+  if (process.env.ENABLE_DEV_FALLBACK !== 'false') {
     const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
     if (Number.isFinite(devFid)) {
       console.warn('Using dev fallback FID:', devFid);
