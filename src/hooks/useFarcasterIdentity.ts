@@ -34,8 +34,8 @@ export function useFarcasterIdentity(): {
         const data = await res.json();
         if (mounted) {
           const fidNum = Number(data.fid);
-          // In web mode, ignore dev fallback responses
-          if (!isInFarcaster && (data.wallet === '0xdev' || fidNum === DEV_FID)) {
+          // In web mode, ignore only dummy dev responses
+          if (!isInFarcaster && data.wallet === '0xdev') {
             setIdentity(null);
           } else {
             const ident: FarcasterIdentity = { fid: fidNum };

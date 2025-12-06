@@ -76,9 +76,12 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
   // Dev fallback - enabled by default in development (can be disabled with ENABLE_DEV_FALLBACK=false)
   if (process.env.ENABLE_DEV_FALLBACK !== 'false') {
     const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
+    const devWallet = String(
+      (process.env.DEV_WALLET || process.env.NEXT_PUBLIC_DEV_WALLET || '0xdev')
+    ).toLowerCase();
     if (Number.isFinite(devFid)) {
-      console.warn('Using dev fallback FID:', devFid);
-      return { fid: devFid, wallet: '0xdev' } as AuthContext;
+      console.warn('Using dev fallback FID:', devFid, 'wallet:', devWallet);
+      return { fid: devFid, wallet: devWallet } as AuthContext;
     }
   }
 
