@@ -770,54 +770,209 @@ pub fn player_age_tick(_ctx: &ReducerContext) { unimplemented!("player_age_tick 
 
 #[reducer]
 pub fn official_create(
-    _ctx: &ReducerContext,
-    _role: String,
-    _ai_seed: i64,
-    _strictness: i32,
-    _advantage_tendency: i32,
-    _offside_tolerance: i32,
-    _var_propensity: i32,
-    _consistency: i32,
-    _fitness: i32,
-    _reputation: i32,
-) { unimplemented!("official_create not implemented yet"); }
+    ctx: &ReducerContext,
+    role: String,
+    ai_seed: i64,
+    strictness: i32,
+    advantage_tendency: i32,
+    offside_tolerance: i32,
+    var_propensity: i32,
+    consistency: i32,
+    fitness: i32,
+    reputation: i32,
+) {
+    let id = new_id(ctx, "off", &format!("{}:{}", role, ai_seed));
+    let now = now_ms(ctx);
+    ctx.db().officials().insert(Official {
+        official_id: id,
+        role,
+        strictness,
+        advantage_tendency,
+        offside_tolerance,
+        var_propensity,
+        consistency,
+        fitness,
+        reputation,
+        ai_seed,
+        active: true,
+        last_assigned_ms: 0,
+    });
+}
 
 #[reducer]
 pub fn official_assign_to_match(
-    _ctx: &ReducerContext,
-    _match_id: String,
-    _referee_id: String,
-    _assistant_left_id: String,
-    _assistant_right_id: String,
-    _var_id: Option<String>,
-) { unimplemented!("official_assign_to_match not implemented yet"); }
+    ctx: &ReducerContext,
+    match_id: String,
+    referee_id: String,
+    assistant_left_id: String,
+    assistant_right_id: String,
+    var_id: Option<String>,
+) {
+    let now = now_ms(ctx);
+    let tbl = ctx.db().match_official_assignment();
+    match tbl.match_id().find(&match_id) {
+        Some(mut row) => {
+            row.referee_id = referee_id.clone();
+            row.assistant_left_id = assistant_left_id.clone();
+            row.assistant_right_id = assistant_right_id.clone();
+            row.var_id = var_id.clone();
+            row.assigned_at_ms = now;
+            tbl.match_id().update(row);
+        }
+        None => {
+            tbl.insert(MatchOfficialAssignment {
+                match_id: match_id.clone(),
+                referee_id: referee_id.clone(),
+                assistant_left_id: assistant_left_id.clone(),
+                assistant_right_id: assistant_right_id.clone(),
+                var_id: var_id.clone(),
+                assigned_at_ms: now,
+            });
+        }
+    }
+    // Update last_assigned_ms on officials (if exist)
+    let off_tbl = ctx.db().officials();
+    if let Some(mut o) = off_tbl.official_id().find(&referee_id) { o.last_assigned_ms = now; off_tbl.official_id().update(o); }
+    if let Some(mut o) = off_tbl.official_id().find(&assistant_left_id) { o.last_assigned_ms = now; off_tbl.official_id().update(o); }
+    if let Some(mut o) = off_tbl.official_id().find(&assistant_right_id) { o.last_assigned_ms = now; off_tbl.official_id().update(o); }
+    if let Some(vid) = var_id.as_ref() {
+        if let Some(mut o) = off_tbl.official_id().find(vid) { o.last_assigned_ms = now; off_tbl.official_id().update(o); }
+    }
+}
 
 #[reducer]
 pub fn official_update_after_match(
-    _ctx: &ReducerContext,
-    _official_id: String,
-    _fitness_delta: i32,
-    _reputation_delta: i32,
-    _consistency_delta: i32,
-) { unimplemented!("official_update_after_match not implemented yet"); }
+    ctx: &ReducerContext,
+    official_id: String,
+    fitness_delta: i32,
+    reputation_delta: i32,
+    consistency_delta: i32,
+) {
+    let tbl = ctx.db().officials();
+    if let Some(mut o) = tbl.official_id().find(&official_id) {
+        let clamp = |v: i32| -> i32 { if v < 0 { 0 } else if v > 100 { 100 } else { v } };
+        o.fitness = clamp(o.fitness + fitness_delta);
+        o.reputation = clamp(o.reputation + reputation_delta);
+        o.consistency = clamp(o.consistency + consistency_delta);
+        tbl.official_id().update(o);
+    }
+}
 
 #[reducer]
 pub fn var_review_record(
-    _ctx: &ReducerContext,
-    _match_id: String,
-    _ts_ms: i64,
-    _decision: String,
-    _reason: String,
-    _meta_json: String,
-) { unimplemented!("var_review_record not implemented yet"); }
+    ctx: &ReducerContext,
+    match_id: String,
+    ts_ms: i64,
+    decision: String,
+    reason: String,
+    meta_json: String,
+) {
+    let payload = format!(
+        "{{\"match_id\":\"{}\",\"ts_ms\":{},\"decision\":\"{}\",\"reason\":\"{}\",\"meta\":{}}}",
+        match_id, ts_ms, decision, reason, meta_json
+    );
+    append_event(ctx, "var_review", 0, payload, Some(match_id));
+}
 
 #[reducer]
 pub fn commentary_append(
-    _ctx: &ReducerContext,
-    _match_id: String,
-    _ts_ms: i64,
-    _tone: String,
-    _lang: String,
-    _text: String,
-    _meta_json: String,
-) { unimplemented!("commentary_append not implemented yet"); }
+    ctx: &ReducerContext,
+    match_id: String,
+    ts_ms: i64,
+    tone: String,
+    lang: String,
+    text: String,
+    meta_json: String,
+) {
+    let id = new_id(ctx, "cmt", &match_id);
+    ctx.db().commentary_log().insert(CommentaryLog {
+        id,
+        match_id,
+        ts_ms,
+        tone,
+        lang,
+        text,
+        meta_json,
+    });
+}
+
+#[reducer]
+pub fn official_set_active(ctx: &ReducerContext, official_id: String, active: bool) {
+    if let Some(mut o) = ctx.db().officials().official_id().find(&official_id) {
+        o.active = active;
+        ctx.db().officials().official_id().update(o);
+    }
+}
+
+// --- Atomic purchase reducers ---
+
+#[reducer]
+pub fn marketplace_purchase_apply(
+    ctx: &ReducerContext,
+    tx_hash: String,
+    buyer_fid: i64,
+    listing_id: String,
+    endpoint: String,
+) {
+    // Idempotency: if tx already used, no-op
+    if ctx.db().transaction_used().tx_hash().find(&tx_hash).is_some() {
+        return;
+    }
+
+    // Close listing and transfer
+    let listings = ctx.db().listing();
+    let mut l = listings.id().find(&listing_id).ok_or("listing_not_found").unwrap();
+    if l.status != "active" { panic!("listing_closed"); }
+    l.status = "closed".into();
+    l.closed_at_ms = Some(now_ms(ctx));
+    listings.id().update(l.clone());
+    let evt = append_event(ctx, "ListingSold", buyer_fid, serde_json::to_string(&l).unwrap_or("{}".into()), Some(listing_id.clone()));
+    transfer_item(ctx, &l.item_id, l.seller_fid, buyer_fid, &evt.id).unwrap();
+    on_item_transferred(ctx, &l.item_id, buyer_fid);
+    push_inbox(ctx, l.seller_fid, format!("listing-sold-{}", evt.id), "listing_sold", "Item Sold!", "Your item was purchased.");
+    push_inbox(ctx, buyer_fid, format!("listing-bought-{}", evt.id), "listing_bought", "Purchase Complete", "You bought an item.");
+
+    // Mark tx as used atomically within same reducer
+    ctx.db().transaction_used().insert(TransactionUsed {
+        tx_hash,
+        used_at_ms: now_ms(ctx),
+        used_by_fid: buyer_fid,
+        endpoint,
+    });
+}
+
+#[reducer]
+pub fn auction_buy_now_apply(
+    ctx: &ReducerContext,
+    tx_hash: String,
+    buyer_fid: i64,
+    auction_id: String,
+    buy_now_wei: String,
+    endpoint: String,
+) {
+    // Idempotency: if tx already used, no-op
+    if ctx.db().transaction_used().tx_hash().find(&tx_hash).is_some() {
+        return;
+    }
+
+    let auctions = ctx.db().auction();
+    let mut a = auctions.id().find(&auction_id).ok_or("auction_not_found").unwrap();
+    if a.status != "active" { panic!("auction_closed"); }
+    if a.buy_now_wei.as_deref() != Some(&buy_now_wei) { panic!("invalid_buy_now"); }
+    let evt = append_event(ctx, "AuctionBuyNow", buyer_fid, serde_json::to_string(&a).unwrap_or("{}".into()), Some(auction_id.clone()));
+    a.status = "finalized".into();
+    a.finalized_at_ms = Some(now_ms(ctx));
+    a.top_bid_wei = Some(buy_now_wei);
+    a.top_bidder_fid = Some(buyer_fid);
+    auctions.id().update(a.clone());
+    transfer_item(ctx, &a.item_id, a.seller_fid, buyer_fid, &evt.id).unwrap();
+    on_item_transferred(ctx, &a.item_id, buyer_fid);
+
+    // Mark tx as used atomically
+    ctx.db().transaction_used().insert(TransactionUsed {
+        tx_hash,
+        used_at_ms: now_ms(ctx),
+        used_by_fid: buyer_fid,
+        endpoint,
+    });
+}
