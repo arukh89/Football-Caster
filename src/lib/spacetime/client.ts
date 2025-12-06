@@ -62,9 +62,10 @@ export class SpacetimeClientBuilder {
         const builder = Gen.DbConnection.builder().withUri(this._uri);
         // Prefer identity when provided and supported by SDK
         if (isIdentity) {
-          if (typeof builder.withDatabaseName === 'function') return builder.withDatabaseName(this._dbName).build();
           if (typeof builder.withDatabaseId === 'function') return builder.withDatabaseId(this._dbName).build();
           if (typeof builder.withIdentity === 'function') return builder.withIdentity(this._dbName).build();
+          // As a last resort, some SDKs overload withDatabaseName to accept identity
+          if (typeof builder.withDatabaseName === 'function') return builder.withDatabaseName(this._dbName).build();
         }
         const moduleName = sanitize(
           env.SPACETIME_MODULE || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || this._dbName,
