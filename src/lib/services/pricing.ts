@@ -1,6 +1,7 @@
 /**
  * Pricing Service - FBC/USD price fetching
- * Sources priority: 0x/Matcha → Custom URL → Dexscreener → Clanker
+ * Sources priority:
+ *   Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → Uniswap v3 on-chain → Custom URL → Clanker
  */
 
 import { CONTRACT_ADDRESSES, CHAIN_CONFIG } from '@/lib/constants';
@@ -742,7 +743,7 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Prefer: Uniswap v4 TWAP → Uniswap v3 TWAP → Uniswap v3 instantaneous → 0x → Custom → Dexscreener → Clanker
+  // Prefer: Uniswap v4 TWAP → Uniswap v3 TWAP → 0x → Dexscreener → Uniswap v3 instantaneous → Custom → Clanker
   let priceUsd: string | null = null;
   let source: 'clanker' | 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' = 'dexscreener';
 
@@ -762,12 +763,6 @@ export async function getFBCPrice(): Promise<PriceData> {
     if (priceUsd) source = '0x';
   }
 
-  // Custom URL
-  if (!priceUsd && CUSTOM_PRICE_URL) {
-    priceUsd = await fetchFromCustom();
-    if (priceUsd) source = 'custom';
-  }
-
   // Dexscreener
   if (!priceUsd) {
     priceUsd = await fetchFromDexscreener();
@@ -778,6 +773,12 @@ export async function getFBCPrice(): Promise<PriceData> {
   if (!priceUsd) {
     priceUsd = await fetchFromUniswapV3Onchain();
     if (priceUsd) source = 'uniswap_v3';
+  }
+
+  // Custom URL (least reliable since it may be arbitrary/HTML)
+  if (!priceUsd && CUSTOM_PRICE_URL) {
+    priceUsd = await fetchFromCustom();
+    if (priceUsd) source = 'custom';
   }
 
   // Fallback to Clanker
