@@ -31,18 +31,22 @@ function toCamelCase(name: string): string {
 async function callReducerCompat(nameSnake: string, argsPositional: any[], argsNamed: Record<string, any>): Promise<any> {
   const r: any = await reducers();
   const camel = toCamelCase(nameSnake);
-  if (typeof r?.[camel] === 'function') {
-    const i64Keys = new Set([
-      'fid', 'buyerFid', 'sellerFid', 'winnerFid', 'challengerFid', 'challengedFid', 'accepterFid', 'reporterFid', 'durationSeconds'
-    ]);
-    const transformed = Object.fromEntries(Object.entries(argsNamed).map(([k, v]) => {
-      if (i64Keys.has(k) && typeof v === 'number' && Number.isInteger(v)) return [k, BigInt(v)];
-      return [k, v];
-    }));
-    return r[camel](transformed);
-  }
-  if (typeof r?.[nameSnake] === 'function') return r[nameSnake](...argsPositional);
-  if (typeof r?.call === 'function') return r.call(nameSnake, ...argsPositional);
+  const i64Keys = new Set([
+    'fid', 'buyerFid', 'sellerFid', 'winnerFid', 'challengerFid', 'challengedFid', 'accepterFid', 'reporterFid',
+    // NPC & squad related
+    'npcFid', 'userFid', 'aiSeed', 'sourceFid', 'followers', 'ownerFid',
+    // Misc durations that some reducers model as i64
+    'durationSeconds', 'nextDecisionAtMs', 'tsMs'
+  ]);
+  const orderedArgNames = Object.keys(argsNamed);
+  const positional = argsPositional.map((v, i) => {
+    const k = orderedArgNames[i];
+    if (k && i64Keys.has(k) && typeof v === 'number' && Number.isInteger(v)) return BigInt(v);
+    return v;
+  });
+  if (typeof r?.call === 'function') return r.call(nameSnake, ...positional);
+  if (typeof r?.[camel] === 'function') return r[camel](...positional);
+  if (typeof r?.[nameSnake] === 'function') return r[nameSnake](...positional);
   throw new Error(`Reducer ${nameSnake} not available`);
 }
 
@@ -355,6 +359,19 @@ export async function stNpcCreate(
   await callReducerCompat('npc_create', [npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson], {
     npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson,
   });
+  // Verify write for reliability in dev
+  try {
+    const st = await getSpacetime();
+    const exists = !!st.db.npcRegistry?.npcFid?.()?.find?.(BigInt(npcFid));
+    if (!exists) {
+      throw new Error('npc_create_noop');
+    }
+  } catch (_) {
+    // fallback to scan
+    const st = await getSpacetime();
+    const ok = Array.from(st.db.npcRegistry.iter?.() ?? []).some((n: any) => Number(n.npcFid) === npcFid);
+    if (!ok) throw new Error('npc_create_noop');
+  }
 }
 
 export async function stNpcMintToken(npcFid: number, ownerFid: number): Promise<void> {

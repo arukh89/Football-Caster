@@ -94,18 +94,20 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     }
 
     const players = generateStarterPack();
+    let alreadyClaimed = false;
     try {
       await stGrantStarterPack(fid, players);
     } catch (e) {
       const msg = (e as Error)?.message || String(e);
-      // Normalize common reducer panics
+      // If starter already claimed, continue to NPC assignment
       if (msg.includes('starter_already_claimed')) {
-        return NextResponse.json({ error: 'Starter already claimed' }, { status: 409 });
+        alreadyClaimed = true;
+      } else {
+        return NextResponse.json(
+          { error: 'Grant reducer failed', detail: msg },
+          { status: 500 }
+        );
       }
-      return NextResponse.json(
-        { error: 'Grant reducer failed', detail: msg },
-        { status: 500 }
-      );
     }
 
     // Admin-only: assign 18 tradable NPC managers to the user
@@ -120,7 +122,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       console.warn('NPC assign failed:', msg);
     }
 
-    return NextResponse.json({ success: true, fid, linkedWallet: wallet || null, playersGranted: players.length, npcsAssigned: 18 });
+    return NextResponse.json({ success: true, fid, linkedWallet: wallet || null, playersGranted: alreadyClaimed ? 0 : players.length, npcsAssigned: 18, alreadyClaimed });
   } catch (error) {
     console.error('Admin grant starter error:', error);
     const msg = (error as Error)?.message || String(error);
