@@ -1,4 +1,6 @@
 {
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "NEXT_USE_TURBOPACK=0 pnpm build",
   "crons": [
     {
       "path": "/api/cron/farcaster-ingest",
