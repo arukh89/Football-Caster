@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { withErrorHandling } from '@/lib/api/http';
+import { withErrorHandling, ok, cache } from '@/lib/api/http';
 import { reducers as stReducers, getEnv, getSpacetime } from '@/lib/spacetime/client';
 
 export const runtime = 'nodejs';
@@ -42,6 +41,6 @@ export async function GET(): Promise<Response> {
     }
     summary.sampleCounts = sample;
 
-    return NextResponse.json(summary);
+    return ok(summary, { headers: cache.privateNoStore });
   });
 }

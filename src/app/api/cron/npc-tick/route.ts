@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { ok } from '@/lib/api/http';
 import { getSpacetime } from '@/lib/spacetime/client';
 import { stNpcUpdateState } from '@/lib/spacetime/api';
 import { executeNpcTick, executeSquadTick } from '@/lib/npc/brain';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<Response> {
   if (process.env.NPC_ENABLED !== 'true') {
-    return new NextResponse('npc disabled', { status: 204 });
+    return ok({ skipped: true });
   }
 
   const st = await getSpacetime();
@@ -37,5 +37,5 @@ export async function GET(): Promise<Response> {
     try { await executeSquadTick({ squad: s }); } catch {}
   }
 
-  return NextResponse.json({ ok: true, processed: dueNpcs.length, now });
+  return ok({ processed: dueNpcs.length, now });
 }

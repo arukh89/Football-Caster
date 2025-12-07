@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { withErrorHandling } from '@/lib/api/http';
+import { ok, withErrorHandling } from '@/lib/api/http';
 import { stListNPCs, type NpcSortKey } from '@/lib/spacetime/api';
 
 export const runtime = 'nodejs';
@@ -19,6 +18,6 @@ export async function GET(req: Request): Promise<Response> {
     const order = (searchParams.get('order') as 'asc' | 'desc') || 'desc';
 
     const result = await stListNPCs({ page, pageSize, active, ownedBy, search, sort, order });
-    return NextResponse.json(result);
+    return ok(result);
   });
 }

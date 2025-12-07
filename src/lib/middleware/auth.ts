@@ -2,7 +2,8 @@
  * Authentication Middleware
  */
 
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { unauthorized } from '@/lib/api/http';
 import { createClient as createQuickAuthClient } from '@farcaster/quick-auth';
 import { stGetUser } from '@/lib/spacetime/api';
 
@@ -117,7 +118,7 @@ export function requireAuth(
     const ctx = await authenticate(req);
 
     if (!ctx) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized('Unauthorized');
     }
 
     return handler(req, ctx);

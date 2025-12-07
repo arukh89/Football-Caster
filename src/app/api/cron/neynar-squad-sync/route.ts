@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { badRequest, ok } from '@/lib/api/http';
 import { stSquadMintFromFarcaster } from '@/lib/spacetime/api';
 import { fetchTopFarcasterUsers } from '@/lib/services/neynar';
 import { calculateRankFromFollowers, calculateIntelligenceFromFollowers } from '@/lib/neynar/score';
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(): Promise<Response> {
   const key = process.env.NEYNAR_API_KEY || process.env.FARCASTER_API_KEY;
   const DEV_FID = Number(process.env.NEXT_PUBLIC_DEV_FID || '250704');
-  if (!key) return new NextResponse('missing NEYNAR_API_KEY', { status: 400 });
+  if (!key) return badRequest('missing NEYNAR_API_KEY');
 
   const users = await fetchTopFarcasterUsers(250);
 
@@ -28,5 +28,5 @@ export async function GET(): Promise<Response> {
     }
   }
 
-  return NextResponse.json({ ok: true, minted });
+  return ok({ minted });
 }
