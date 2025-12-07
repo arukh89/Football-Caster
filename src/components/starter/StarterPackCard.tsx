@@ -29,6 +29,7 @@ export function StarterPackCard(): JSX.Element | null {
     },
     [isInFarcaster]
   );
+  const devMode = process.env.NODE_ENV !== 'production';
   const [loading, setLoading] = React.useState(true);
   const [processing, setProcessing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -47,7 +48,12 @@ export function StarterPackCard(): JSX.Element | null {
       setLoading(true);
       setError(null);
       const headers: Record<string, string> = {};
-      if (identity?.fid) headers['x-fid'] = String(identity.fid);
+      if (identity?.fid) {
+        headers['x-fid'] = String(identity.fid);
+      } else if (devMode) {
+        // Dev fallback: allow browsing as DEV_FID in web mode
+        headers['x-fid'] = String(DEV_FID);
+      }
       const res = await authFetch("/api/starter/status", { cache: "no-store", headers });
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as { hasClaimed: boolean };
