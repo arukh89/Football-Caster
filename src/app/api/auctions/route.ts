@@ -3,58 +3,42 @@
  * POST /api/auctions - Create new auction
  */
 
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { stListActiveAuctions, stCreateAuction } from '@/lib/spacetime/api';
 import { validate, createAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
+import { ok, cache, withErrorHandling, validateBody, badRequest } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(): Promise<Response> {
-  try {
+  return withErrorHandling(async () => {
     const auctions = await stListActiveAuctions();
-
-    return NextResponse.json(
-      { auctions },
-      { headers: { 'Cache-Control': 'private, no-store, no-cache, must-revalidate' } }
-    );
-  } catch (error) {
-    console.error('Get auctions error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch auctions' },
-      { status: 500 }
-    );
-  }
+    return ok({ auctions }, { headers: cache.privateNoStore });
+  });
 }
 
 async function postHandler(req: NextRequest, ctx: { fid: number }): Promise<Response> {
-  try {
-    const body = await req.json();
-    const validation = validate(createAuctionSchema, body);
+  return withErrorHandling(async () => {
+    const parsed = await validateBody(req, createAuctionSchema);
+    if (!parsed.ok) return parsed.res;
 
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
-    }
-
-    const { itemId, reserveFbcWei, durationH, buyNowFbcWei } = validation.data;
+    const { itemId, reserveFbcWei, durationH, buyNowFbcWei } = parsed.data;
     const { fid } = ctx;
 
     const duration = durationH ?? 48;
-    const auction = await stCreateAuction(fid, itemId, reserveFbcWei, duration * 60 * 60, buyNowFbcWei ?? null);
-
-    return NextResponse.json({
-      success: true,
-      auction,
-    });
-  } catch (error) {
-    console.error('Create auction error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create auction' },
-      { status: 500 }
+    const auction = await stCreateAuction(
+      fid,
+      itemId,
+      reserveFbcWei,
+      duration * 60 * 60,
+      buyNowFbcWei ?? null
     );
-  }
+
+    return ok({ success: true, auction });
+  });
 }
 
 export const POST = requireAuth(postHandler);
