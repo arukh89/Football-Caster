@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DesktopNav, Navigation } from "@/components/Navigation";
 import { GlassCard } from "@/components/glass/GlassCard";
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,11 @@ type PageResp = { items: Npc[]; total: number; page: number; pageSize: number };
 export default function NpcDirectoryPage(): JSX.Element {
   const isInFarcaster = useIsInFarcaster();
   const { version } = useSpacetimeLive();
-  const fetcher = (input: RequestInfo | URL, init?: RequestInit) =>
-    (isInFarcaster ? (quickAuth.fetch as any) : fetch)(input as any, init as any);
+  const fetcher = useCallback(
+    (input: RequestInfo | URL, init?: RequestInit) =>
+      (isInFarcaster ? (quickAuth.fetch as any) : fetch)(input as any, init as any),
+    [isInFarcaster]
+  );
 
   const [search, setSearch] = useState("");
   const [activeOnly, setActiveOnly] = useState(true);
@@ -65,7 +68,7 @@ export default function NpcDirectoryPage(): JSX.Element {
       }
     })();
     return () => controller.abort();
-  }, [page, pageSize, search, activeOnly, sort, order, version]);
+  }, [page, pageSize, search, activeOnly, sort, order, version, fetcher]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const canPrev = page > 1;

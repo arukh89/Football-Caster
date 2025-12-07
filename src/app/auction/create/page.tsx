@@ -41,7 +41,7 @@ export default function CreateAuctionPage(): JSX.Element {
       }
     };
     void load();
-  }, [fid]);
+  }, [fid, selectedId]);
 
   const selectedPlayer = myPlayers.find((p) => p.playerId === selectedId) || null;
 

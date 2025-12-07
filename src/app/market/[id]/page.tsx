@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { GlassCard } from '@/components/glass/GlassCard';
@@ -43,14 +43,15 @@ export default function MarketDetailPage(): React.JSX.Element {
   const { wallet, walletClient, publicClient: walletPublicClient, connect } = useWallet();
   const account = wallet.address;
 
-  const fetchListing = async (): Promise<void> => {
+  const fetchListing = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       // For now, fetch all listings and find the one we want
       // In production, you'd have a dedicated endpoint for single listing
       const res = await fetch(API_ENDPOINTS.market.listings);
       if (!res.ok) throw new Error('Failed to fetch listings');
-      const data = await res.json();
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
       const found = data.listings?.find((l: MarketListing) => l.id === id);
       if (!found) throw new Error('Listing not found');
       setListing(found);
@@ -59,13 +60,13 @@ export default function MarketDetailPage(): React.JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     if (id) {
       void fetchListing();
     }
-  }, [id]);
+  }, [id, fetchListing]);
 
   const handleBuyNow = async (): Promise<void> => {
     if (!listing || !account) return;

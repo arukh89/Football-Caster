@@ -234,7 +234,7 @@ export default function MatchPage(): JSX.Element {
       }
       sessionStorage.setItem(key, String(events.length));
     }
-  }, [matchState?.events?.length, currentMatchId, tone, lang]);
+  }, [matchState, currentMatchId, tone, lang]);
 
   // Auto submit result on full-time
   useEffect(() => {
@@ -304,7 +304,7 @@ export default function MatchPage(): JSX.Element {
     }
     
     setIsPlaying(!isPlaying);
-  }, [simulator, isPlaying, matchState]);
+  }, [simulator, isPlaying, matchState, autoAssigned, officialsPool, currentMatchId]);
 
   const handleSkipMinute = useCallback((): void => {
     if (!simulator) return;

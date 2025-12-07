@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { GlassCard } from '@/components/glass/GlassCard';
@@ -53,28 +53,24 @@ export default function AuctionDetailPage(): React.JSX.Element {
   const { wallet, walletClient, publicClient: walletPublicClient, connect } = useWallet();
   const account = wallet.address;
 
-  const fetchAuction = async (): Promise<void> => {
+  const fetchAuction = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       const res = await fetch(`${API_ENDPOINTS.auction.info}`.replace('[id]', id as string));
       if (!res.ok) throw new Error('Failed to fetch auction');
-      const data = await res.json();
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
       setAuction(data.auction);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load auction');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (id) void fetchAuction();
   }, [id]);
 
   useEffect(() => {
     if (id) void fetchAuction();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, id]);
+  }, [id, version, fetchAuction]);
 
   const handlePlaceBid = async (): Promise<void> => {
     if (!auction || !identity) return;

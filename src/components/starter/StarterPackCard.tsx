@@ -64,7 +64,7 @@ export function StarterPackCard(): JSX.Element | null {
     } finally {
       setLoading(false);
     }
-  }, [identity?.fid, authFetch]);
+  }, [identity?.fid, authFetch, devMode]);
 
   React.useEffect(() => {
     void refreshStatus();

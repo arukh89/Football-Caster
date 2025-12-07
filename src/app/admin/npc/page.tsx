@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GlassCard } from "@/components/glass/GlassCard";
 import { Navigation, DesktopNav } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,11 @@ type PageResp = { items: Npc[]; total: number; page: number; pageSize: number };
 
 export default function AdminNpcPage(): JSX.Element {
   const isInFarcaster = useIsInFarcaster();
-  const fetcher = (input: RequestInfo | URL, init?: RequestInit) =>
-    (isInFarcaster ? (quickAuth.fetch as any) : fetch)(input as any, init as any);
+  const fetcher = useCallback(
+    (input: RequestInfo | URL, init?: RequestInit) =>
+      (isInFarcaster ? (quickAuth.fetch as any) : fetch)(input as any, init as any),
+    [isInFarcaster]
+  );
 
   const [me, setMe] = useState<Me>(null);
   const [loadingMe, setLoadingMe] = useState(true);
@@ -62,8 +65,7 @@ export default function AdminNpcPage(): JSX.Element {
         setLoadingMe(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetcher]);
 
   const isAdmin = useMemo(() => {
     if (!me) return false;
@@ -97,7 +99,7 @@ export default function AdminNpcPage(): JSX.Element {
       }
     })();
     return () => controller.abort();
-  }, [isAdmin, page, pageSize, search, activeOnly, ownedOnly, sort, order]);
+  }, [isAdmin, page, pageSize, search, activeOnly, ownedOnly, sort, order, fetcher]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const canPrev = page > 1;
