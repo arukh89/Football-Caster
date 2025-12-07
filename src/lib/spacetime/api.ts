@@ -405,6 +405,92 @@ export async function stNpcUpdateState(npcFid: number, nextDecisionAtMs: number,
   await callReducerCompat('npc_update_state', [npcFid, nextDecisionAtMs, budgetFbcWei], { npcFid, nextDecisionAtMs, budgetFbcWei });
 }
 
+// --- NPC query helpers ---
+function mapNpcRow(n: any): any {
+  return {
+    npcFid: Number(n.npcFid),
+    tokenId: n.tokenId ?? null,
+    aiSeed: Number(n.aiSeed),
+    difficultyTier: Number(n.difficultyTier),
+    budgetFbcWei: String(n.budgetFbcWei),
+    persona: String(n.persona),
+    ownerFid: n.ownerFid != null ? Number(n.ownerFid) : null,
+    managerConfidence: Number(n.managerConfidence ?? 0),
+    pressureLevel: Number(n.pressureLevel ?? 0),
+    mood: String(n.mood ?? ''),
+    nextDecisionAt: iso(Number(n.nextDecisionAtMs)),
+    lastActiveAt: iso(Number(n.lastActiveMs)),
+    active: !!n.active,
+  };
+}
+
+export async function stGetNPC(npcFid: number): Promise<any | null> {
+  const st = await getSpacetime();
+  try {
+    const idxNpc = (st.db as any).npcRegistry?.npcFid?.();
+    const row = idxNpc?.find ? idxNpc.find(BigInt(npcFid)) : undefined;
+    if (row) return mapNpcRow(row);
+  } catch {}
+  // Fallback: scan
+  for (const n of (st.db as any).npcRegistry?.iter?.() ?? []) {
+    if (Number((n as any).npcFid) === npcFid) return mapNpcRow(n);
+  }
+  return null;
+}
+
+export type NpcSortKey = 'lastActive' | 'fid' | 'difficulty' | 'confidence';
+
+export async function stListNPCs(params: {
+  page?: number;
+  pageSize?: number;
+  active?: boolean;
+  ownedBy?: number;
+  search?: string;
+  sort?: NpcSortKey;
+  order?: 'asc' | 'desc';
+}): Promise<{ items: any[]; total: number; page: number; pageSize: number }> {
+  const st = await getSpacetime();
+  const page = Math.max(1, Math.floor(params.page ?? 1));
+  const pageSize = Math.max(1, Math.min(200, Math.floor(params.pageSize ?? 25)));
+  const active = params.active;
+  const ownedBy = params.ownedBy;
+  const search = (params.search || '').trim().toLowerCase();
+  const sort: NpcSortKey = params.sort ?? 'lastActive';
+  const order = params.order ?? 'desc';
+
+  let rows = Array.from((st.db as any).npcRegistry?.iter?.() ?? []) as any[];
+
+  if (typeof active === 'boolean') rows = rows.filter((n) => !!n.active === active);
+  if (Number.isFinite(ownedBy as any)) rows = rows.filter((n) => (n.ownerFid != null) && Number(n.ownerFid) === ownedBy);
+  if (search) {
+    rows = rows.filter((n) => {
+      const fidStr = String(n.npcFid || '').toLowerCase();
+      const tok = String(n.tokenId || '').toLowerCase();
+      const persona = String(n.persona || '').toLowerCase();
+      return fidStr.includes(search) || tok.includes(search) || persona.includes(search);
+    });
+  }
+
+  const total = rows.length;
+
+  rows.sort((a, b) => {
+    let va = 0, vb = 0;
+    switch (sort) {
+      case 'fid': va = Number(a.npcFid); vb = Number(b.npcFid); break;
+      case 'difficulty': va = Number(a.difficultyTier); vb = Number(b.difficultyTier); break;
+      case 'confidence': va = Number(a.managerConfidence ?? 0); vb = Number(b.managerConfidence ?? 0); break;
+      case 'lastActive':
+      default: va = Number(a.lastActiveMs ?? 0); vb = Number(b.lastActiveMs ?? 0); break;
+    }
+    const diff = va - vb;
+    return order === 'asc' ? diff : -diff;
+  });
+
+  const start = (page - 1) * pageSize;
+  const slice = rows.slice(start, start + pageSize).map(mapNpcRow);
+  return { items: slice, total, page, pageSize };
+}
+
 // Player state
 export async function stPlayerProfileInit(playerId: string, ageYears: number, morale: number, fatigue: number, satisfaction: number, loyalty: number): Promise<void> {
   await callReducerCompat('player_profile_init', [playerId, ageYears, morale, fatigue, satisfaction, loyalty], {
