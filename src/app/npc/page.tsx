@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
 import { quickAuth } from "@farcaster/miniapp-sdk";
+import { useSpacetimeLive } from "@/providers/SpacetimeLiveProvider";
 
 type Npc = {
   npcFid: number;
@@ -25,6 +26,7 @@ type PageResp = { items: Npc[]; total: number; page: number; pageSize: number };
 
 export default function NpcDirectoryPage(): JSX.Element {
   const isInFarcaster = useIsInFarcaster();
+  const { version } = useSpacetimeLive();
   const fetcher = (input: RequestInfo | URL, init?: RequestInit) =>
     (isInFarcaster ? (quickAuth.fetch as any) : fetch)(input as any, init as any);
 
@@ -63,7 +65,7 @@ export default function NpcDirectoryPage(): JSX.Element {
       }
     })();
     return () => controller.abort();
-  }, [page, pageSize, search, activeOnly, sort, order]);
+  }, [page, pageSize, search, activeOnly, sort, order, version]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const canPrev = page > 1;

@@ -19,6 +19,7 @@ import { createConfig } from 'wagmi';
 import { wagmiConfig } from '@/lib/wagmi-config';
 import { createWalletClient, http, createPublicClient } from 'viem';
 import { base } from 'viem/chains';
+import { useSpacetimeLive } from '@/providers/SpacetimeLiveProvider';
 
 interface AuctionDetail {
   id: string;
@@ -48,6 +49,7 @@ export default function AuctionDetailPage(): React.JSX.Element {
   const [buying, setBuying] = useState(false);
 
   const { identity } = useFarcasterIdentity();
+  const { version } = useSpacetimeLive();
   const { wallet, walletClient, publicClient: walletPublicClient, connect } = useWallet();
   const account = wallet.address;
 
@@ -72,6 +74,11 @@ export default function AuctionDetailPage(): React.JSX.Element {
       return () => clearInterval(interval);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (id) void fetchAuction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version, id]);
 
   const handlePlaceBid = async (): Promise<void> => {
     if (!auction || !identity) return;

@@ -13,9 +13,11 @@ import PullToRefresh from '@/components/PullToRefresh';
 // Snapshots removed
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 // types unused here
+import { useSpacetimeLive } from '@/providers/SpacetimeLiveProvider';
 
 export default function MarketPage(): JSX.Element {
   const { identity } = useFarcasterIdentity();
+  const { version } = useSpacetimeLive();
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
@@ -37,6 +39,7 @@ export default function MarketPage(): JSX.Element {
   };
 
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void refresh(); }, [version]);
   useEffect(() => {
     const onFocus = () => void refresh();
     const onVis = () => { if (!document.hidden) void refresh(); };

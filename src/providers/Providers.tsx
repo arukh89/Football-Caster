@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { wagmiConfig } from '@/lib/wagmi-config';
+import { SpacetimeLiveProvider } from '@/providers/SpacetimeLiveProvider';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +23,9 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <SpacetimeLiveProvider>
+          {children}
+        </SpacetimeLiveProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

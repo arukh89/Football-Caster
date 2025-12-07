@@ -9,6 +9,7 @@ import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import { API_ENDPOINTS } from '@/lib/constants';
 import type { InboxMessage } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useSpacetimeLive } from '@/providers/SpacetimeLiveProvider';
 
 const MESSAGE_ICONS: Record<string, typeof InboxIcon> = {
   morale_summary_team: TrendingUp,
@@ -36,6 +37,7 @@ const MESSAGE_TITLES: Record<string, string> = {
 
 export default function InboxPage(): JSX.Element {
   const { identity } = useFarcasterIdentity();
+  const { version } = useSpacetimeLive();
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [lastSeenAt, setLastSeenAt] = useState<string>(
@@ -60,7 +62,7 @@ export default function InboxPage(): JSX.Element {
     };
 
     fetchMessages();
-  }, [identity]);
+  }, [identity, version]);
 
   const markAllRead = (): void => {
     const now = new Date().toISOString();

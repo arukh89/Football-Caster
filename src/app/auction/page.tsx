@@ -17,9 +17,11 @@ import type { Auction } from '@/lib/types';
 import { API_ENDPOINTS } from '@/lib/constants';
 import { useWallet } from '@/hooks/useWallet';
 import { payInFBC } from '@/lib/wallet-utils';
+import { useSpacetimeLive } from '@/providers/SpacetimeLiveProvider';
 
 export default function AuctionPage(): React.JSX.Element {
   const { identity } = useFarcasterIdentity();
+  const { version } = useSpacetimeLive();
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
@@ -42,6 +44,7 @@ export default function AuctionPage(): React.JSX.Element {
     finally { setLoading(false); }
   };
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void refresh(); }, [version]);
   useEffect(() => {
     const onFocus = () => void refresh();
     const onVis = () => { if (!document.hidden) void refresh(); };
