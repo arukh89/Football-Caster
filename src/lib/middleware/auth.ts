@@ -22,10 +22,12 @@ function getToken(req: NextRequest): string | null {
   return null;
 }
 
-function getDomain(req: NextRequest): string {
-  const xfHost = req.headers.get('x-forwarded-host');
-  const host = (xfHost || req.headers.get('host') || '').trim();
-  return host.replace(/^https?:\/\//, '');
+function getOrigin(req: NextRequest): string {
+  const xfProto = (req.headers.get('x-forwarded-proto') || '').trim();
+  const xfHost = (req.headers.get('x-forwarded-host') || '').trim();
+  const host = (xfHost || req.headers.get('host') || '').trim().replace(/^https?:\/\//, '');
+  const proto = xfProto || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  return `${proto}://${host}`;
 }
 
 /**
@@ -33,7 +35,7 @@ function getDomain(req: NextRequest): string {
  */
 export async function authenticate(req: NextRequest): Promise<AuthContext | null> {
   const token = getToken(req);
-  const fidHeader = req.headers.get('x-fid');
+  const fidHeader = req.headers.get('x-fid') || req.headers.get('x-warpcast-user-fid');
   const walletHeader = req.headers.get('x-wallet');
 
   if (fidHeader && walletHeader) {
@@ -44,7 +46,26 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
     // First: try Quick Auth JWT verification
     try {
       const qa = createQuickAuthClient();
-      const payload = await qa.verifyJwt({ token, domain: getDomain(req) });
+      const origin = getOrigin(req);
+      // Primary verify with request origin
+      let payload = await qa.verifyJwt({ token, domain: origin });
+      // If verification fails due to domain mismatch, try configured frontend URL origin
+      // and a bare host fallback.
+      if (!payload) {
+        const envUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL;
+        const candidates: string[] = [];
+        if (envUrl) {
+          try { const u = new URL(envUrl); candidates.push(`${u.protocol}//${u.host}`); } catch {}
+        }
+        const bareHost = origin.replace(/^https?:\/\//, '');
+        candidates.push(bareHost); // some QA libs historically accepted host-only
+        for (const dom of candidates) {
+          try {
+            payload = await qa.verifyJwt({ token, domain: dom as any });
+            if (payload) break;
+          } catch {}
+        }
+      }
       const fid = Number(payload.sub);
       let wallet = '0xdev';
       try {

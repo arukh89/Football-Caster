@@ -88,15 +88,16 @@ export function SwapToFBC(): JSX.Element {
         // Estimate via USD bridges: USDC=$1; ETH via 0x USDC→ETH price; then divide by FBC USD price
         const fbcPriceRes = await fetch('/api/pricing/fbc-usd', { cache: 'no-store' });
         const fbcJson = await fbcPriceRes.json().catch(() => ({} as any));
-        const priceUsd = Number(fbcJson?.priceUsd || '1');
+        const priceUsd = Number(fbcJson?.priceUsd);
         if (!isFinite(priceUsd) || priceUsd <= 0) throw new Error('Pricing unavailable');
         let usdAmount = 0;
         if (useSellAmount) {
           if (sellToken.id === 'USDC') {
             usdAmount = Number(sellAmount);
           } else {
-            // get USDC→ETH price for 1 USD to derive USD/ETH
-            const p = new URLSearchParams({ sellToken: 'USDC', buyToken: 'ETH', sellAmount: '1000000' });
+            // get USDC→ETH price for 1 USD to derive USD/ETH (use USDC address, not symbol)
+            const usdcAddr = TOKENS.find(t => t.id === 'USDC')!.address!;
+            const p = new URLSearchParams({ sellToken: usdcAddr, buyToken: 'ETH', sellAmount: '1000000' });
             const r = await fetch(`/api/zeroex/quote?${p.toString()}`, { cache: 'no-store' });
             if (r.ok) {
               const jj = await r.json();

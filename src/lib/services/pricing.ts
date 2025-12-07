@@ -185,34 +185,18 @@ async function readPoolState(pool: `0x${string}`): Promise<{ sqrtPriceX96: bigin
 
 function pow10(n: number): bigint { return 10n ** BigInt(n); }
 
-function usdPerFbcFromSqrt(
-  fbc: `0x${string}`,
-  usdc: `0x${string}`,
-  token0: `0x${string}`,
+// token1 per token0 from sqrtPriceX96 with decimals
+function price1Per0FromSqrtX96(
   sqrtPriceX96: bigint,
-  fbcDecimals: number,
-  usdcDecimals: number,
+  dec0: number,
+  dec1: number,
 ): string {
-  // price1Per0 (decimal-adjusted) = (sqrtPriceX96^2 / 2^192) * 10^(decimals1 - decimals0)
-  // We want USD/FBC.
+  // price1Per0 = (sqrt^2 / 2^192) * 10^(dec1 - dec0)
   const ratioX192 = sqrtPriceX96 * sqrtPriceX96;
   const q192 = 2n ** 192n;
-
-  if (token0.toLowerCase() === fbc.toLowerCase()) {
-    // token0 = FBC (d0=fbc), token1 = USDC (d1=usdc)
-    // Correct decimal factor uses 10^(d0 - d1) => 10^(fbc - usdc)
-    // USD/FBC = (ratioX192 / q192) * 10^(fbc - usdc)
-    const numerator = ratioX192 * pow10(fbcDecimals);
-    const denominator = q192 * pow10(usdcDecimals);
-    return divToDecimalString(numerator, denominator, 12);
-  } else {
-    // token0 = USDC (d0=usdc), token1 = FBC (d1=fbc)
-    // FBC/USDC = (ratioX192 / q192) * 10^(usdc - fbc)  [since 10^(d0 - d1)]
-    // USD/FBC = 1 / (FBC/USDC) = (q192 * 10^fbc) / (ratioX192 * 10^usdc)
-    const numerator = q192 * pow10(fbcDecimals);
-    const denominator = ratioX192 * pow10(usdcDecimals);
-    return divToDecimalString(numerator, denominator, 12);
-  }
+  const numerator = ratioX192 * pow10(dec1);
+  const denominator = q192 * pow10(dec0);
+  return divToDecimalString(numerator, denominator, 12);
 }
 
 async function quoteUsdPerFbcFromPool(tokenA: `0x${string}`, tokenB: `0x${string}`, fee: number): Promise<string | null> {
@@ -223,11 +207,22 @@ async function quoteUsdPerFbcFromPool(tokenA: `0x${string}`, tokenB: `0x${string
   const [t0, t1] = sortTokens(tokenA, tokenB);
   const fbc = CONTRACT_ADDRESSES.fbc;
   const usdc = USDC_BASES[0];
-  const [fbcDec, usdcDec] = await Promise.all([
-    getTokenDecimals(fbc),
-    getTokenDecimals(usdc),
+  const [dec0, dec1] = await Promise.all([
+    getTokenDecimals(t0),
+    getTokenDecimals(t1),
   ]);
-  return usdPerFbcFromSqrt(fbc, usdc, t0, state.sqrtPriceX96, fbcDec, usdcDec);
+  const p = price1Per0FromSqrtX96(state.sqrtPriceX96, dec0, dec1); // token1 per token0
+  if (t0.toLowerCase() === fbc.toLowerCase()) {
+    // token0=FBC, token1=USDC → p = USD/FBC
+    return p;
+  }
+  // token0=USDC, token1=FBC → p = FBC/USD; invert
+  const [i, f = ''] = p.split('.');
+  const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+  const invScaled = (10n ** 12n * 10n ** 12n) / scaled;
+  const intPart = invScaled / (10n ** 12n);
+  const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+  return frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
 }
 
 async function fetchFromUniswapV3Onchain(): Promise<string | null> {
@@ -349,25 +344,14 @@ function pow1p0001(tick: number): number {
   return Math.pow(1.0001, tick);
 }
 
-function usdPerFbcFromAvgTick(
-  fbc: `0x${string}`,
-  usdc: `0x${string}`,
-  token0: `0x${string}`,
+function price1Per0FromTick(
   avgTick: number,
-  fbcDecimals: number,
-  usdcDecimals: number,
+  dec0: number,
+  dec1: number,
 ): string {
-  const price1Per0 = pow1p0001(avgTick); // token1 per token0 (raw units)
-  if (token0.toLowerCase() === fbc.toLowerCase()) {
-    // token0=FBC, token1=USDC → USD/FBC = price1Per0 * 10^(dec0-dec1)
-    const factor = Math.pow(10, fbcDecimals - usdcDecimals);
-    return String(price1Per0 * factor);
-  } else {
-    // token0=USDC, token1=FBC → we have FBC/USDC, invert and apply 10^(dec0-dec1)
-    const factor = Math.pow(10, usdcDecimals - fbcDecimals);
-    const inv = 1 / price1Per0;
-    return String(inv * factor);
-  }
+  // price1Per0 = 1.0001^tick * 10^(dec1 - dec0)
+  const p = Math.pow(1.0001, avgTick) * Math.pow(10, dec1 - dec0);
+  return String(p);
 }
 
 async function observeAvgTick(pool: `0x${string}`, seconds: number): Promise<number | null> {
@@ -397,13 +381,23 @@ async function quoteUsdPerFbcFromPoolTwap(tokenA: `0x${string}`, tokenB: `0x${st
   const avgTick = await observeAvgTick(pool, seconds);
   if (avgTick === null) return null;
   const [t0, t1] = sortTokens(tokenA, tokenB);
-  const fbc = CONTRACT_ADDRESSES.fbc;
-  const usdc = USDC_BASES[0];
-  const [fbcDec, usdcDec] = await Promise.all([
-    getTokenDecimals(fbc),
-    getTokenDecimals(usdc),
+  const [dec0, dec1] = await Promise.all([
+    getTokenDecimals(t0),
+    getTokenDecimals(t1),
   ]);
-  return usdPerFbcFromAvgTick(fbc, usdc, t0, avgTick, fbcDec, usdcDec);
+  const p = price1Per0FromTick(avgTick, dec0, dec1); // token1 per token0
+  const fbc = CONTRACT_ADDRESSES.fbc;
+  if (t0.toLowerCase() === fbc.toLowerCase()) {
+    // token0=FBC → token1 is USDC → p = USD/FBC
+    return p;
+  }
+  // token0=USDC → p = FBC/USD → invert
+  const [i, f = ''] = p.split('.');
+  const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+  const invScaled = (10n ** 12n * 10n ** 12n) / scaled;
+  const intPart = invScaled / (10n ** 12n);
+  const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+  return frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
 }
 
 async function fetchFromUniswapV3Twap(): Promise<string | null> {
@@ -427,12 +421,19 @@ async function fetchFromUniswapV3Twap(): Promise<string | null> {
       if (avgTick === null) continue;
       const [t0, t1] = sortTokens(usdc, WETH_BASE);
       const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
-      // price1Per0 = 1.0001^tick * 10^(dec0 - dec1) = token1 per token0
-      const price1Per0 = Math.pow(1.0001, avgTick) * Math.pow(10, dec0 - dec1);
-      const val = t0.toLowerCase() === WETH_BASE.toLowerCase()
-        ? price1Per0 // WETH (t0) → USDC (t1): USDC/WETH
-        : (1 / price1Per0); // USDC (t0) → WETH (t1): invert to USD/WETH
-      usdPerWeth = String(val);
+      const p = price1Per0FromTick(avgTick, dec0, dec1); // token1 per token0
+      if (t0.toLowerCase() === WETH_BASE.toLowerCase()) {
+        // t0=WETH → p = USDC per WETH
+        usdPerWeth = p;
+      } else {
+        // t0=USDC → p = WETH per USDC → invert
+        const [i, f = ''] = p.split('.');
+        const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+        const invScaled = (10n ** 12n * 10n ** 12n) / scaled;
+        const intPart = invScaled / (10n ** 12n);
+        const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+        usdPerWeth = frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+      }
       break;
     }
     if (!usdPerWeth) return null;
@@ -445,12 +446,19 @@ async function fetchFromUniswapV3Twap(): Promise<string | null> {
       if (avgTick === null) continue;
       const [t0, t1] = sortTokens(WETH_BASE, fbc);
       const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
-      // price1Per0 = token1 per token0
-      const price1Per0 = Math.pow(1.0001, avgTick) * Math.pow(10, dec0 - dec1);
-      const val = t0.toLowerCase() === fbc.toLowerCase()
-        ? price1Per0 // FBC (t0) → WETH (t1): WETH/FBC
-        : (1 / price1Per0); // WETH (t0) → FBC (t1): invert to WETH/FBC
-      wethPerFbc = String(val);
+      const p = price1Per0FromTick(avgTick, dec0, dec1); // token1 per token0
+      if (t0.toLowerCase() === fbc.toLowerCase()) {
+        // t0=FBC → p = WETH per FBC
+        wethPerFbc = p;
+      } else {
+        // t0=WETH → p = FBC per WETH → invert
+        const [i, f = ''] = p.split('.');
+        const scaled = BigInt(i + (f + '000000000000').slice(0, 12));
+        const invScaled = (10n ** 12n * 10n ** 12n) / scaled;
+        const intPart = invScaled / (10n ** 12n);
+        const frac = (invScaled % (10n ** 12n)).toString().padStart(12, '0').replace(/0+$/, '');
+        wethPerFbc = frac.length ? `${intPart.toString()}.${frac}` : intPart.toString();
+      }
       break;
     }
     if (!wethPerFbc) return null;
@@ -490,7 +498,8 @@ const UNISWAP_V4_SWAP_EVENT = {
 function price1Per0FromSqrt(token0: `0x${string}`, token1: `0x${string}`, sqrtPriceX96: bigint, dec0: number, dec1: number): string {
   const ratioX192 = sqrtPriceX96 * sqrtPriceX96;
   const q192 = 2n ** 192n;
-  return divToDecimalString(ratioX192 * pow10(dec0), q192 * pow10(dec1), 12);
+  // price1Per0 = (sqrt^2 / 2^192) * 10^(dec1 - dec0)
+  return divToDecimalString(ratioX192 * pow10(dec1), q192 * pow10(dec0), 12);
 }
 
 async function usdPerWethFromV3Twap(seconds = TWAP_SECONDS): Promise<string | null> {
@@ -502,7 +511,7 @@ async function usdPerWethFromV3Twap(seconds = TWAP_SECONDS): Promise<string | nu
     if (avgTick === null) continue;
     const [t0, t1] = sortTokens(usdc, WETH_BASE);
     const [dec0, dec1] = await Promise.all([ getTokenDecimals(t0), getTokenDecimals(t1) ]);
-    const p = usdPerFbcFromAvgTick(t0 as any, t1 as any, t0, avgTick, dec0, dec1);
+    const p = price1Per0FromTick(avgTick, dec0, dec1); // token1 per token0
     if (t0.toLowerCase() === WETH_BASE.toLowerCase()) {
       // t0=WETH, p = USD/WETH already
       return p;
