@@ -13,6 +13,13 @@ const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || '';
 const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
 // Optional manual override for local/dev: set any of these envs to a positive number
 const PRICE_OVERRIDE_ENV = process.env.NEXT_PUBLIC_FBC_PRICE_USD;
+// Dev convenience: in non-production, assume 1 FBC = $1 unless explicitly disabled
+const ASSUME_ONE_USD: boolean = (
+  (process.env.NEXT_PUBLIC_ASSUME_FBC_ONE_USD || (process.env.NODE_ENV !== 'production' ? 'true' : 'false'))
+    .toString()
+    .toLowerCase()
+    .trim() !== 'false'
+);
 // USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
 const USDC_DEFAULTS: `0x${string}`[] = [
   '0x833589fcd6edb6e08f4c7c76f99918fcae4f2de0',
@@ -724,7 +731,7 @@ export async function getFBCPrice(): Promise<PriceData> {
 
   // Prefer: Uniswap v4 TWAP → Uniswap v3 TWAP → 0x → Dexscreener → Uniswap v3 instantaneous → Custom
   let priceUsd: string | null = null;
-  let source: 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' = 'dexscreener';
+  let source: 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' | 'override' = 'dexscreener';
 
   // Uniswap v4 TWAP (if PoolId configured)
   priceUsd = await fetchFromUniswapV4Twap();
@@ -768,6 +775,12 @@ export async function getFBCPrice(): Promise<PriceData> {
   const price = parseFloat(priceUsd);
   if (isNaN(price) || price <= 0) {
     throw new Error('Invalid price data received');
+  }
+
+  // In development, optionally assume 1 FBC = $1 to avoid misleading quotes
+  if (process.env.NODE_ENV !== 'production' && ASSUME_ONE_USD) {
+    priceUsd = '1';
+    source = 'override';
   }
 
   // Debug log for diagnostics

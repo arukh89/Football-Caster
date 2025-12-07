@@ -49,6 +49,7 @@ export function SwapToFBC(): JSX.Element {
   const [sellAmount, setSellAmount] = React.useState<string>('');
   const [loading, setLoading] = React.useState(false);
   const [quote, setQuote] = React.useState<Quote | null>(null);
+  const [estBuyFbcWei, setEstBuyFbcWei] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [txHash, setTxHash] = React.useState<`0x${string}` | null>(null);
 
@@ -78,9 +79,45 @@ export function SwapToFBC(): JSX.Element {
       else params.set('sellToken', sellToken.address!);
 
       const res = await fetch(`/api/zeroex/quote?${params.toString()}`, { cache: 'no-store' });
-      const q = await res.json();
-      if (!res.ok) throw new Error(q?.validationErrors?.[0]?.reason || q?.reason || 'Quote failed');
-      setQuote(q as Quote);
+      if (res.ok) {
+        const q = await res.json();
+        setQuote(q as Quote);
+        setEstBuyFbcWei(null);
+      } else {
+        // Fallback estimation when 0x cannot quote this pair (e.g., custom token not supported yet)
+        // Estimate via USD bridges: USDC=$1; ETH via 0x USDC→ETH price; then divide by FBC USD price
+        const fbcPriceRes = await fetch('/api/pricing/fbc-usd', { cache: 'no-store' });
+        const fbcJson = await fbcPriceRes.json().catch(() => ({} as any));
+        const priceUsd = Number(fbcJson?.priceUsd || '1');
+        if (!isFinite(priceUsd) || priceUsd <= 0) throw new Error('Pricing unavailable');
+        let usdAmount = 0;
+        if (useSellAmount) {
+          if (sellToken.id === 'USDC') {
+            usdAmount = Number(sellAmount);
+          } else {
+            // get USDC→ETH price for 1 USD to derive USD/ETH
+            const p = new URLSearchParams({ sellToken: 'USDC', buyToken: 'ETH', sellAmount: '1000000' });
+            const r = await fetch(`/api/zeroex/quote?${p.toString()}`, { cache: 'no-store' });
+            if (r.ok) {
+              const jj = await r.json();
+              const ethPerUsd = Number(formatUnits(BigInt(jj.buyAmount as string), 18));
+              const eth = Number(sellAmount);
+              usdAmount = eth / (ethPerUsd || 1);
+            }
+          }
+          const fbcFloat = usdAmount / priceUsd;
+          const wei = parseUnits(String(fbcFloat || 0), 18).toString();
+          setEstBuyFbcWei(wei);
+          setQuote(null);
+        } else {
+          // Given target FBC amount, estimate sell side in USD and show
+          const fbc = Number(buyAmountFbc || '0');
+          const usd = fbc * priceUsd;
+          const wei = parseUnits(String(fbc || 0), 18).toString();
+          setEstBuyFbcWei(wei);
+          setQuote(null);
+        }
+      }
     } catch (e) {
       setQuote(null);
       setError((e as Error).message);
@@ -88,6 +125,14 @@ export function SwapToFBC(): JSX.Element {
       setLoading(false);
     }
   }, [wallet.address, buyAmountFbc, sellAmount, sellToken.id, sellToken.address, sellToken.decimals, useSellAmount]);
+
+  // Auto-quote on input changes (debounced)
+  React.useEffect(() => {
+    if (!wallet.address) return;
+    if (!(useSellAmount || (buyAmountFbc && Number(buyAmountFbc) > 0))) return;
+    const t = setTimeout(() => { void getQuote(); }, 400);
+    return () => clearTimeout(t);
+  }, [wallet.address, useSellAmount, sellAmount, buyAmountFbc, sellToken.id, getQuote]);
 
   const ensureAllowance = async (client: WalletClient, amount: bigint, owner: `0x${string}`, spender: `0x${string}`): Promise<void> => {
     if (!sellToken.address) return; // ETH doesn't need allowance
@@ -186,18 +231,23 @@ export function SwapToFBC(): JSX.Element {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               Get Quote
             </Button>
-            <Button onClick={doSwap} disabled={loading || !canSwap} className="gap-2 championship-button">
+            <Button onClick={doSwap} disabled={loading || !canSwap || !quote} className="gap-2 championship-button">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               Swap
             </Button>
           </div>
 
-          {quote && (
+          {(quote || estBuyFbcWei) && (
             <div className="text-xs text-muted-foreground">
-              {useSellAmount
-                ? <>Est. you receive ~{formatUnits(BigInt(quote.buyAmount), 18)} FBC for {formatUnits(BigInt(quote.sellAmount), sellToken.decimals)} {sellToken.id}</>
-                : <>Est. you pay ~{formatUnits(BigInt(quote.sellAmount), sellToken.decimals)} {sellToken.id} for {formatUnits(BigInt(quote.buyAmount), 18)} FBC</>
-              }
+              {quote ? (
+                useSellAmount
+                  ? <>Est. you receive ~{formatUnits(BigInt(quote.buyAmount), 18)} FBC for {formatUnits(BigInt(quote.sellAmount), sellToken.decimals)} {sellToken.id}</>
+                  : <>Est. you pay ~{formatUnits(BigInt(quote.sellAmount), sellToken.decimals)} {sellToken.id} for {formatUnits(BigInt(quote.buyAmount), 18)} FBC</>
+              ) : (
+                useSellAmount
+                  ? <>Est. you receive ~{formatUnits(BigInt(estBuyFbcWei || '0'), 18)} FBC (estimation)</>
+                  : <>Target ~{formatUnits(BigInt(estBuyFbcWei || '0'), 18)} FBC (estimation)</>
+              )}
             </div>
           )}
 
