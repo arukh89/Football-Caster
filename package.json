@@ -70,7 +70,6 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@anton-seriesfi/ts-typie": "^3.0.2",
     "@axe-core/playwright": "^4.11.0",
     "@playwright/test": "^1.57.0",
     "@types/date-fns": "^2.6.3",
@@ -79,7 +78,6 @@
     "@types/react-dom": "^18.3.1",
     "@typescript-eslint/parser": "^8.14.0",
     "autoprefixer": "^10.4.21",
-    "baseline-browser-mapping": "^2.9.0",
     "cross-env": "^10.1.0",
     "depcheck": "^1.4.7",
     "eslint": "^9.14.0",
@@ -91,8 +89,7 @@
   },
   "overrides": {
     "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "baseline-browser-mapping": "^2.8.32"
+    "@types/react-dom": "^18.3.1"
   },
   "engines": {
     "node": ">=22.11"

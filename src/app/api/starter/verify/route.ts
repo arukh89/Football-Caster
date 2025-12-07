@@ -10,7 +10,7 @@ import { fetchFarcasterUser, rankFromFollowers, intelligenceFromFollowers } from
 import { verifyFBCTransfer } from '@/lib/services/verification';
 import { validate, verifyStarterSchema } from '@/lib/middleware/validation';
 import { requireAuth, isDevFID } from '@/lib/middleware/auth';
-import { randomUUID } from 'crypto';
+import { generateStarterPack, toUiPack } from '@/lib/starter/generate';
 import { withErrorHandling, validateBody, ok, conflict, badRequest } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
@@ -19,20 +19,7 @@ export const dynamic = 'force-dynamic';
 const TREASURY_ADDRESS = (process.env.NEXT_PUBLIC_TREASURY_ADDRESS as Address) || '0x0000000000000000000000000000000000000000';
 const STARTER_PRICE_USD = process.env.NEXT_PUBLIC_STARTER_PACK_PRICE_USD || '1';
 
-// Generate starter pack (18 random players)
-function generateStarterPack(): Array<{ itemId: string; itemType: string; rating: number }> {
-  const players: Array<{ itemId: string; itemType: string; rating: number }> = [];
-
-  for (let i = 0; i < 18; i++) {
-    players.push({
-      itemId: `player-${randomUUID()}`,
-      itemType: 'player',
-      rating: Math.floor(Math.random() * 30) + 60, // 60-90 rating
-    });
-  }
-
-  return players;
-}
+// generateStarterPack moved to shared util
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
   return withErrorHandling(async () => {
@@ -45,13 +32,8 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     // - Admin wallet (treasury address)
     const isAdminWallet = (wallet || '').toLowerCase() === TREASURY_ADDRESS.toLowerCase();
     if (isDevFID(fid) || isAdminWallet) {
-      const pack = generateStarterPack();
-      await stGrantStarterPack(fid, pack.map((p) => ({
-        player_id: p.itemId,
-        name: null,
-        position: null,
-        rating: p.rating,
-      })));
+      const players = generateStarterPack();
+      await stGrantStarterPack(fid, players);
       // Auto-mint NPC Squad for the user (from Neynar)
       try {
         const u = await fetchFarcasterUser(fid);
@@ -61,7 +43,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         const persona = JSON.stringify({ username: u?.username, display_name: u?.display_name, bio: u?.bio, followers });
         await stSquadMintFromFarcaster(fid, followers, fid, intel, rank, persona);
       } catch {}
-      return ok({ success: true, pack, bypass: true, npcSquadMinted: true });
+      return ok({ success: true, pack: toUiPack(players), bypass: true, npcSquadMinted: true });
     }
 
     // For non-bypass path, validate request body
@@ -88,13 +70,8 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     await stMarkTxUsed(txHash, fid, '/api/starter/verify');
 
     // Generate and grant pack via Spacetime
-    const pack = generateStarterPack();
-    await stGrantStarterPack(fid, pack.map((p) => ({
-      player_id: p.itemId,
-      name: null,
-      position: null,
-      rating: p.rating,
-    })));
+    const players = generateStarterPack();
+    await stGrantStarterPack(fid, players);
 
     // Auto-mint NPC Squad for the user (from Neynar)
     try {
@@ -106,7 +83,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       await stSquadMintFromFarcaster(fid, followers, fid, intel, rank, persona);
     } catch {}
 
-    return ok({ success: true, pack, npcSquadMinted: true });
+    return ok({ success: true, pack: toUiPack(players), npcSquadMinted: true });
   });
 }
 

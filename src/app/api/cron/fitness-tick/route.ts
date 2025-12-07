@@ -1,4 +1,4 @@
-import { ok } from '@/lib/api/http';
+import { ok, jsonError } from '@/lib/api/http';
 import { stPlayerStateRecoverTick, stPlayerAgeTick } from '@/lib/spacetime/api';
 
 export const runtime = 'nodejs';
@@ -13,7 +13,7 @@ export async function GET(): Promise<Response> {
     }
     return ok({ now });
   } catch (e) {
-    // Reducers are stubs for now; swallow errors in early phases
-    return new Response(JSON.stringify({ success: false, error: String(e) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    // Standardized error response
+    return jsonError((e as Error)?.message || 'Internal error', 500);
   }
 }

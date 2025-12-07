@@ -11,25 +11,14 @@ import { reducers as stReducers, getEnv, getSpacetime } from '@/lib/spacetime/cl
 import { adminGrantStarterSchema, validate } from '@/lib/middleware/validation';
 import type { Address } from 'viem';
 import { recoverMessageAddress, isAddressEqual } from 'viem';
-import { randomUUID } from 'crypto';
+import { generateStarterPack } from '@/lib/starter/generate';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
 import { withErrorHandling, validateBody, ok, badRequest, forbidden, conflict, serverError } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function generateStarterPack(): Array<{ player_id: string; name: string | null; position: string | null; rating: number }> {
-  const players: Array<{ player_id: string; name: string | null; position: string | null; rating: number }> = [];
-  for (let i = 0; i < 18; i++) {
-    players.push({
-      player_id: `player-${randomUUID()}`,
-      name: null,
-      position: null,
-      rating: Math.floor(Math.random() * 30) + 60,
-    });
-  }
-  return players;
-}
+// generateStarterPack moved to shared util
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
   return withErrorHandling(async () => {
