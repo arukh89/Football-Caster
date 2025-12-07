@@ -5,7 +5,8 @@
 
 import { type NextRequest } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stHasClaimedStarter, stGrantStarterPack, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
+import { stHasClaimedStarter, stGrantStarterPack, stIsTxUsed, stMarkTxUsed, stSquadMintFromFarcaster } from '@/lib/spacetime/api';
+import { fetchFarcasterUser, rankFromFollowers, intelligenceFromFollowers } from '@/lib/services/neynar';
 import { verifyFBCTransfer } from '@/lib/services/verification';
 import { validate, verifyStarterSchema } from '@/lib/middleware/validation';
 import { requireAuth, isDevFID } from '@/lib/middleware/auth';
@@ -51,7 +52,16 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         position: null,
         rating: p.rating,
       })));
-      return ok({ success: true, pack, bypass: true });
+      // Auto-mint NPC Squad for the user (from Neynar)
+      try {
+        const u = await fetchFarcasterUser(fid);
+        const followers = u?.followers || 0;
+        const rank = rankFromFollowers(followers);
+        const intel = intelligenceFromFollowers(followers);
+        const persona = JSON.stringify({ username: u?.username, display_name: u?.display_name, bio: u?.bio, followers });
+        await stSquadMintFromFarcaster(fid, followers, fid, intel, rank, persona);
+      } catch {}
+      return ok({ success: true, pack, bypass: true, npcSquadMinted: true });
     }
 
     // For non-bypass path, validate request body
@@ -86,7 +96,17 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       rating: p.rating,
     })));
 
-    return ok({ success: true, pack });
+    // Auto-mint NPC Squad for the user (from Neynar)
+    try {
+      const u = await fetchFarcasterUser(fid);
+      const followers = u?.followers || 0;
+      const rank = rankFromFollowers(followers);
+      const intel = intelligenceFromFollowers(followers);
+      const persona = JSON.stringify({ username: u?.username, display_name: u?.display_name, bio: u?.bio, followers });
+      await stSquadMintFromFarcaster(fid, followers, fid, intel, rank, persona);
+    } catch {}
+
+    return ok({ success: true, pack, npcSquadMinted: true });
   });
 }
 

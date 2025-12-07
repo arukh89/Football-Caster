@@ -68,7 +68,7 @@ export default function MarketPage(): JSX.Element {
                 <ShoppingBag className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold">Player Market</h1>
+                <h1 className="text-2xl md:text-3xl font-bold">Market</h1>
                 <p className="text-sm text-muted-foreground">
                   Trade players at weekly market prices
                 </p>
@@ -85,7 +85,7 @@ export default function MarketPage(): JSX.Element {
               <Link href="/market/list">
                 <Button className="gap-2">
                   <TrendingUp className="h-4 w-4" />
-                  List Player
+                  List Item
                 </Button>
               </Link>
             </div>
@@ -98,11 +98,11 @@ export default function MarketPage(): JSX.Element {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search players..."
+                    placeholder="Search items..."
                     value={search}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
                     className="pl-10"
-                    aria-label="Search players"
+                    aria-label="Search items"
                   />
                 </div>
               </div>
@@ -190,7 +190,7 @@ export default function MarketPage(): JSX.Element {
                   <GlassCard key={l.id} hover className="p-0 overflow-hidden">
                     <div className="p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <div className="font-bold">Player {String(l.playerId).slice(0, 6)}...</div>
+                        <div className="font-bold">{(l.itemType === 'squad' ? 'Squad' : 'Player')} {String(l.playerId).slice(0, 6)}...</div>
                         <div className="text-xs text-muted-foreground">Seller FID {l.sellerFid}</div>
                       </div>
 

@@ -98,14 +98,28 @@ export async function stListActiveListings(): Promise<any[]> {
   const rows = (Array.from(st.db.listing.iter()) as any[])
     .filter((l) => l.status === 'active')
     .sort((a, b) => Number(b.createdAtMs - a.createdAtMs));
-  return rows.map((l) => ({
-    id: l.id,
-    playerId: l.itemId,
-    sellerFid: Number(l.sellerFid),
-    priceFbcWei: l.priceWei,
-    createdAt: iso(Number(l.createdAtMs)),
-    status: 'active',
-  }));
+  return rows.map((l) => {
+    // Resolve item type from inventory
+    let itemType = 'player';
+    try {
+      const item = (st.db as any).inventoryItem?.itemId?.()?.find?.(l.itemId);
+      if (item?.itemType) itemType = String(item.itemType);
+    } catch {
+      // scan fallback
+      for (const it of (st.db as any).inventoryItem?.iter?.() ?? []) {
+        if ((it as any).itemId === l.itemId) { itemType = String((it as any).itemType || 'player'); break; }
+      }
+    }
+    return {
+      id: l.id,
+      itemType,
+      playerId: l.itemId,
+      sellerFid: Number(l.sellerFid),
+      priceFbcWei: l.priceWei,
+      createdAt: iso(Number(l.createdAtMs)),
+      status: 'active',
+    };
+  });
 }
 
 export async function stGetListing(id: string): Promise<any | null> {

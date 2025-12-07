@@ -87,6 +87,8 @@ import PvpCreateChallenge from "./pvp_create_challenge_reducer";
 export { PvpCreateChallenge };
 import PvpSubmitResult from "./pvp_submit_result_reducer";
 export { PvpSubmitResult };
+import SquadMintFromFarcaster from "./squad_mint_from_farcaster_reducer";
+export { SquadMintFromFarcaster };
 import VarReviewRecord from "./var_review_record_reducer";
 export { VarReviewRecord };
 
@@ -415,6 +417,7 @@ const reducersSchema = __reducers(
   __reducerSchema("pvp_accept", PvpAccept),
   __reducerSchema("pvp_create_challenge", PvpCreateChallenge),
   __reducerSchema("pvp_submit_result", PvpSubmitResult),
+  __reducerSchema("squad_mint_from_farcaster", SquadMintFromFarcaster),
   __reducerSchema("var_review_record", VarReviewRecord),
 );
 

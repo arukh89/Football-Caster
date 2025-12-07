@@ -26,6 +26,7 @@ interface MarketListing {
   isActive: boolean;
   createdAt: number;
   sellerWallet?: string;
+  itemType?: 'player' | 'squad' | string;
 }
 
 export default function MarketDetailPage(): React.JSX.Element {
@@ -153,9 +154,9 @@ export default function MarketDetailPage(): React.JSX.Element {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h2 className="font-semibold mb-2">Player Details</h2>
+            <h2 className="font-semibold mb-2">{listing.itemType === 'squad' ? 'Squad' : 'Player'} Details</h2>
             <div className="space-y-2 text-sm">
-              <div>Player ID: {listing.playerId}</div>
+              <div>Item ID: {listing.playerId}</div>
               <div>Seller FID: {listing.sellerFid}</div>
               <div>Listed: {new Date(listing.createdAt * 1000).toLocaleDateString()}</div>
             </div>

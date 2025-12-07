@@ -735,6 +735,78 @@ pub fn npc_update_state(
     }
 }
 
+#[reducer]
+pub fn squad_mint_from_farcaster(
+    ctx: &ReducerContext,
+    source_fid: i64,
+    followers: i64,
+    owner_fid: i64,
+    intelligence_score: i32,
+    rank: String,
+    persona_json: String,
+) {
+    let now = now_ms(ctx);
+    let token_id = format!("squad-{}", source_fid);
+    let squad_id = token_id.clone();
+
+    // Idempotent inventory mint (item_type = "squad")
+    let items = ctx.db().inventory_item();
+    match items.item_id().find(&token_id) {
+        Some(mut it) => {
+            // Ensure correct type and owner; update owner if differs
+            it.item_type = "squad".into();
+            if it.owner_fid != owner_fid { it.owner_fid = owner_fid; }
+            items.item_id().update(it);
+        }
+        None => {
+            let evt = append_event(
+                ctx,
+                "SquadMinted",
+                owner_fid,
+                format!("{{\"source_fid\":{},\"followers\":{},\"rank\":\"{}\"}}", source_fid, followers, rank),
+                Some(token_id.clone()),
+            );
+            items.insert(InventoryItem {
+                item_id: token_id.clone(),
+                owner_fid,
+                item_type: "squad".into(),
+                acquired_at_ms: now,
+                hold_until_ms: 0,
+                source_event_id: evt.id,
+            });
+        }
+    }
+
+    // Upsert squad registry row
+    let tbl = ctx.db().squad_registry();
+    match tbl.squad_id().find(&squad_id) {
+        Some(mut s) => {
+            s.source_fid = source_fid;
+            s.followers = followers;
+            s.intelligence_score = if intelligence_score < 0 { 0 } else if intelligence_score > 100 { 100 } else { intelligence_score };
+            s.rank = rank.clone();
+            s.persona = persona_json.clone();
+            s.token_id = token_id.clone();
+            s.owner_fid = owner_fid;
+            s.active = true;
+            tbl.squad_id().update(s);
+        }
+        None => {
+            tbl.insert(SquadRegistry {
+                squad_id: squad_id.clone(),
+                source_fid,
+                followers,
+                intelligence_score: if intelligence_score < 0 { 0 } else if intelligence_score > 100 { 100 } else { intelligence_score },
+                rank,
+                persona: persona_json,
+                token_id: token_id,
+                owner_fid,
+                active: true,
+            });
+        }
+    }
+}
+
 // --- Player State Reducers (stubs) ---
 
 #[reducer]

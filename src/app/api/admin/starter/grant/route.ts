@@ -5,7 +5,8 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth, isAdminFID } from '@/lib/middleware/auth';
-import { stHasClaimedStarter, stGrantStarterPack, stLinkWallet, stNpcAssignForUser } from '@/lib/spacetime/api';
+import { stHasClaimedStarter, stGrantStarterPack, stLinkWallet, stNpcAssignForUser, stSquadMintFromFarcaster } from '@/lib/spacetime/api';
+import { fetchFarcasterUser, rankFromFollowers, intelligenceFromFollowers } from '@/lib/services/neynar';
 import { reducers as stReducers, getEnv, getSpacetime } from '@/lib/spacetime/client';
 import { adminGrantStarterSchema, validate } from '@/lib/middleware/validation';
 import type { Address } from 'viem';
@@ -111,7 +112,17 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       console.warn('NPC assign failed:', msg);
     }
 
-    return ok({ success: true, fid, linkedWallet: wallet || null, playersGranted: alreadyClaimed ? 0 : players.length, npcsAssigned: 18, alreadyClaimed });
+    // Also mint an NPC Squad for the user (based on their Farcaster profile)
+    try {
+      const u = await fetchFarcasterUser(fid);
+      const followers = u?.followers || 0;
+      const rank = rankFromFollowers(followers);
+      const intel = intelligenceFromFollowers(followers);
+      const persona = JSON.stringify({ username: u?.username, display_name: u?.display_name, bio: u?.bio, followers });
+      await stSquadMintFromFarcaster(fid, followers, fid, intel, rank, persona);
+    } catch {}
+
+    return ok({ success: true, fid, linkedWallet: wallet || null, playersGranted: alreadyClaimed ? 0 : players.length, npcsAssigned: 18, npcSquadMinted: true, alreadyClaimed });
   });
 }
 
