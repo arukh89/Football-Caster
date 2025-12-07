@@ -159,8 +159,8 @@ export async function getSpacetime() {
   try {
     const conn = await _clientPromise;
     try {
-      // Ensure client cache is populated
-      conn.subscriptionBuilder?.().subscribeToAllTables?.();
+      // Subscriptions are managed by SpacetimeLiveProvider; avoid early sends while socket connects
+      // Previously we called subscribeToAllTables here, which could trigger WebSocket send during CONNECTING
     } catch {}
     _client = conn;
     return conn;

@@ -10,6 +10,8 @@ import { PerformanceChart } from '@/components/PerformanceChart';
 import { UpcomingMatches } from '@/components/dashboard/UpcomingMatches';
 import { OnboardingFlow } from '@/components/tutorial/OnboardingFlow';
 import { StarterPackCard } from '@/components/starter/StarterPackCard';
+import dynamic from 'next/dynamic';
+const SwapToFBC = dynamic(() => import('@/components/swap/SwapToFBC').then(m => m.SwapToFBC), { ssr: false });
 import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import { useWallet } from '@/hooks/useWallet';
 // Realtime-only: snapshots removed
@@ -203,8 +205,11 @@ export default function HomePage(): JSX.Element {
             )}
           </div>
 
-          {/* Starter Pack Card */}
-          <StarterPackCard />
+          {/* Starter Pack + Swap */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <StarterPackCard />
+            <SwapToFBC />
+          </div>
 
           {/* Status Cards with Championship styling */}
           {userClub && (
