@@ -23,7 +23,8 @@ export default function TransfersPage(): JSX.Element {
     const load = async (): Promise<void> => {
       try {
         const res = await fetch('/api/market/listings', { cache: 'no-store' });
-        const data = await res.json();
+        const payload = await res.json();
+        const data = payload?.data ?? payload;
         setListings((data.listings || []) as Listing[]);
         setLoadError(null);
       } catch (e) {

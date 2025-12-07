@@ -27,7 +27,8 @@ export default function MarketPage(): JSX.Element {
     try {
       setLoading(true);
       const res = await fetch('/api/market/listings', { cache: 'no-store' });
-      const data = await res.json();
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
       setListings((data.listings || []) as any[]);
       setLastUpdated(Date.now());
       setLoadError(null);

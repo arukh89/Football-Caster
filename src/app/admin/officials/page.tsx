@@ -33,7 +33,8 @@ export default function OfficialsAdminPage(): JSX.Element {
     setLoading(true)
     try {
       const r = await fetch('/api/officials', { cache: 'no-store' })
-      const j = await r.json()
+      const jp = await r.json()
+      const j = jp?.data ?? jp
       setOfficials(j.officials || [])
       setSynthetic(!!j.synthetic)
     } finally {

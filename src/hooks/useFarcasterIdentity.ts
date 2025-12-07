@@ -30,8 +30,16 @@ export function useFarcasterIdentity(): {
         const res = isInFarcaster
           ? await quickAuth.fetch('/api/auth/me')
           : await fetch('/api/auth/me');
+        if (res.status === 401) {
+          if (mounted) {
+            setIdentity(null);
+            setIsLoading(false);
+          }
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const payload = await res.json();
+        const data = payload?.data ?? payload;
         if (mounted) {
           const fidNum = Number(data.fid);
           // In web mode, ignore dev fallback responses

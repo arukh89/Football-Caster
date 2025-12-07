@@ -65,7 +65,8 @@ export default function MatchPage(): JSX.Element {
       try {
         if (!identity?.fid) return;
         const res = await fetch(`/api/players/mine`, { cache: 'no-store' });
-        const data = await res.json();
+        const payload = await res.json();
+        const data = payload?.data ?? payload;
         setMyPlayers(data.players || []);
       } catch {
         setMyPlayers([]);
@@ -78,7 +79,8 @@ export default function MatchPage(): JSX.Element {
     (async () => {
       try {
         const r = await fetch('/api/officials', { cache: 'no-store' });
-        const j = await r.json();
+        const jp = await r.json();
+        const j = jp?.data ?? jp;
         setOfficialsPool((j.officials || []).filter((o: any) => o.active));
       } catch {
         setOfficialsPool(null);
@@ -91,7 +93,8 @@ export default function MatchPage(): JSX.Element {
     try {
       const res = await fetch('/api/pvp/current', { cache: 'no-store' });
       if (!res.ok) return;
-      const data = await res.json();
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
       if (!data?.match) {
         setCurrentMatchId(null);
         setCurrentMatchStatus(null);

@@ -30,7 +30,8 @@ export default function SquadPage(): JSX.Element {
     const load = async (): Promise<void> => {
       try {
         const res = await fetch(`/api/players/mine`, { cache: 'no-store' });
-        const data = await res.json();
+        const payload = await res.json();
+        const data = payload?.data ?? payload;
         const my = (data.players || []) as Player[];
         setMyPlayers(my);
 

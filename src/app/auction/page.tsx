@@ -33,7 +33,8 @@ export default function AuctionPage(): React.JSX.Element {
     try {
       setLoading(true);
       const res = await fetch('/api/auctions', { cache: 'no-store' });
-      const data = await res.json();
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
       setAuctions((data.auctions || []) as Auction[]);
       setLastUpdated(Date.now());
       setError(null);
@@ -77,7 +78,8 @@ export default function AuctionPage(): React.JSX.Element {
 
       // Fetch payment target
       const infoRes = await fetch(API_ENDPOINTS.auction.info.replace('[id]', auction.id), { cache: 'no-store' });
-      const info = await infoRes.json();
+      const infoPayload = await infoRes.json();
+      const info = infoPayload?.data ?? infoPayload;
       if (!infoRes.ok) throw new Error(info.error || 'Failed to fetch buy-now info');
 
       const sellerWallet = info.sellerWallet as `0x${string}`;

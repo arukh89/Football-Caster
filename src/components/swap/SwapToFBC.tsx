@@ -80,14 +80,16 @@ export function SwapToFBC(): JSX.Element {
 
       const res = await fetch(`/api/zeroex/quote?${params.toString()}`, { cache: 'no-store' });
       if (res.ok) {
-        const q = await res.json();
-        setQuote(q as Quote);
+        const payload = await res.json();
+        const q = (payload?.data ?? payload) as Quote;
+        setQuote(q);
         setEstBuyFbcWei(null);
       } else {
         // Fallback estimation when 0x cannot quote this pair (e.g., custom token not supported yet)
         // Estimate via USD bridges: USDC=$1; ETH via 0x USDC→ETH price; then divide by FBC USD price
         const fbcPriceRes = await fetch('/api/pricing/fbc-usd', { cache: 'no-store' });
-        const fbcJson = await fbcPriceRes.json().catch(() => ({} as any));
+        const fbcPayload = await fbcPriceRes.json().catch(() => ({} as any));
+        const fbcJson = fbcPayload?.data ?? fbcPayload;
         const priceUsd = Number(fbcJson?.priceUsd);
         if (!isFinite(priceUsd) || priceUsd <= 0) throw new Error('Pricing unavailable');
         let usdAmount = 0;
@@ -100,7 +102,8 @@ export function SwapToFBC(): JSX.Element {
             const p = new URLSearchParams({ sellToken: usdcAddr, buyToken: 'ETH', sellAmount: '1000000' });
             const r = await fetch(`/api/zeroex/quote?${p.toString()}`, { cache: 'no-store' });
             if (r.ok) {
-              const jj = await r.json();
+              const pp = await r.json();
+              const jj = pp?.data ?? pp;
               const ethPerUsd = Number(formatUnits(BigInt(jj.buyAmount as string), 18));
               const eth = Number(sellAmount);
               usdAmount = eth / (ethPerUsd || 1);

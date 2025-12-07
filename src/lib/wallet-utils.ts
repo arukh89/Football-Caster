@@ -191,7 +191,8 @@ export async function payInFBC(
         const url = `${OX_QUOTE_URL}?sellToken=ETH&buyToken=${CONTRACT_ADDRESSES.fbc}&buyAmount=${missing}&takerAddress=${account}&slippagePercentage=0.02&includedSources=Uniswap_V3&skipValidation=true`;
         const res = await fetch(url, { headers: { accept: 'application/json' } });
         if (!res.ok) throw new Error(`0x quote failed (${res.status})`);
-        const q = await res.json();
+        const payload = await res.json();
+        const q = payload?.data ?? payload;
         const toAddr: `0x${string}` = q.to;
         const data: `0x${string}` = q.data;
         const value: bigint = BigInt(q.value || '0');

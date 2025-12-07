@@ -15,7 +15,8 @@ export function PvpNotifier(): JSX.Element | null {
     try {
       const res = await fetch('/api/inbox?unread=true', { cache: 'no-store' });
       if (!res.ok) return;
-      const data = await res.json();
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
       const msgs: InboxMsg[] = data?.messages || [];
       const m = msgs.find((x) => x.type === 'pvp_challenge');
       if (m) setPending(m);

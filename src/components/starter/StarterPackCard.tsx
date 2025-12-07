@@ -56,7 +56,8 @@ export function StarterPackCard(): JSX.Element | null {
       }
       const res = await authFetch("/api/starter/status", { cache: "no-store", headers });
       if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as { hasClaimed: boolean };
+      const payload = await res.json();
+      const data = (payload?.data ?? payload) as { hasClaimed: boolean };
       setHasClaimed(!!data.hasClaimed);
     } catch (e) {
       setError("Failed to load starter pack status");
@@ -86,7 +87,8 @@ export function StarterPackCard(): JSX.Element | null {
         throw new Error(data?.error || "Failed to get quote");
       }
       
-      const quoteData = (await res.json()) as QuoteResponse;
+      const payload = await res.json();
+      const quoteData = (payload?.data ?? payload) as QuoteResponse;
       setQuote(quoteData);
       setStep('payment');
     } catch (e) {
@@ -118,7 +120,8 @@ export function StarterPackCard(): JSX.Element | null {
           // fetch from auth if identity not ready
           const meRes = await authFetch('/api/auth/me');
           if (meRes.ok) {
-            const me = await meRes.json();
+            const payload = await meRes.json();
+            const me = payload?.data ?? payload;
             fid = Number(me?.fid);
           }
         }

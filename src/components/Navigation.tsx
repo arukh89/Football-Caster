@@ -124,7 +124,8 @@ export function DesktopNav(): JSX.Element {
   async function checkInbox(): Promise<void> {
     try {
       const res = await fetch('/api/inbox?unread=true', { cache: 'no-store' });
-      const data = await res.json();
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
       const count = (data?.messages || []).length;
       toast(count > 0 ? `${count} unread message(s)` : 'Inbox up to date');
     } catch {}

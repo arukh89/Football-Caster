@@ -32,7 +32,8 @@ export default function LeaderboardClient(): JSX.Element {
     try {
       const res = await fetch(`/api/season/leaderboard?${qs}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { leaderboard: LeaderRow[] };
+      const payload = await res.json();
+      const data = (payload?.data ?? payload) as { leaderboard: LeaderRow[] };
       setRows(data.leaderboard || []);
     } catch (e: any) {
       setError(e?.message || 'Failed to load leaderboard');
