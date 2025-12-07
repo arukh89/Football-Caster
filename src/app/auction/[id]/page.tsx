@@ -68,11 +68,7 @@ export default function AuctionDetailPage(): React.JSX.Element {
   };
 
   useEffect(() => {
-    if (id) {
-      void fetchAuction();
-      const interval = setInterval(fetchAuction, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
-    }
+    if (id) void fetchAuction();
   }, [id]);
 
   useEffect(() => {
