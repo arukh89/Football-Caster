@@ -46,12 +46,14 @@ export function SwapToFBC(): JSX.Element {
 
   const [sellToken, setSellToken] = React.useState<TokenOption>(TOKENS[0]);
   const [buyAmountFbc, setBuyAmountFbc] = React.useState<string>('1');
+  const [sellAmount, setSellAmount] = React.useState<string>('');
   const [loading, setLoading] = React.useState(false);
   const [quote, setQuote] = React.useState<Quote | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [txHash, setTxHash] = React.useState<`0x${string}` | null>(null);
 
-  const canSwap = !!wallet.address && !!walletClient && !!buyAmountFbc && Number(buyAmountFbc) > 0;
+  const useSellAmount = !!sellAmount && Number(sellAmount) > 0;
+  const canSwap = !!wallet.address && !!walletClient && (useSellAmount || (!!buyAmountFbc && Number(buyAmountFbc) > 0));
 
   const getQuote = React.useCallback(async () => {
     if (!wallet.address) { setError('Connect wallet first'); return; }
@@ -59,14 +61,19 @@ export function SwapToFBC(): JSX.Element {
       setLoading(true);
       setError(null);
 
-      const buyAmountWei = parseUnits(buyAmountFbc, 18).toString();
       const params = new URLSearchParams({
         buyToken: CONTRACT_ADDRESSES.fbc,
-        buyAmount: buyAmountWei,
         takerAddress: wallet.address,
         slippagePercentage: '0.02',
         skipValidation: 'true',
       });
+      if (useSellAmount) {
+        const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString();
+        params.set('sellAmount', sellAmountWei);
+      } else {
+        const buyAmountWei = parseUnits(buyAmountFbc || '0', 18).toString();
+        params.set('buyAmount', buyAmountWei);
+      }
       if (sellToken.id === 'ETH') params.set('sellToken', 'ETH');
       else params.set('sellToken', sellToken.address!);
 
@@ -80,7 +87,7 @@ export function SwapToFBC(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [wallet.address, buyAmountFbc, sellToken.id, sellToken.address]);
+  }, [wallet.address, buyAmountFbc, sellAmount, sellToken.id, sellToken.address, sellToken.decimals, useSellAmount]);
 
   const ensureAllowance = async (client: WalletClient, amount: bigint, owner: `0x${string}`, spender: `0x${string}`): Promise<void> => {
     if (!sellToken.address) return; // ETH doesn't need allowance
@@ -154,7 +161,7 @@ export function SwapToFBC(): JSX.Element {
 
           {error && <div className="text-sm text-red-500 mb-2">{error}</div>}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
             <div className="grid gap-1">
               <Label>Pay with</Label>
               <Select value={sellToken.id} onValueChange={(v) => { const t = TOKENS.find(t => t.id === v as any)!; setSellToken(t); setQuote(null); }}>
@@ -165,8 +172,12 @@ export function SwapToFBC(): JSX.Element {
               </Select>
             </div>
             <div className="grid gap-1">
-              <Label>FBC amount</Label>
-              <Input value={buyAmountFbc} onChange={(e) => setBuyAmountFbc(e.target.value)} placeholder="1.0" />
+              <Label>Amount to pay ({sellToken.id})</Label>
+              <Input value={sellAmount} onChange={(e) => { setSellAmount(e.target.value); setQuote(null); }} placeholder={sellToken.id === 'ETH' ? '0.05' : '50'} />
+            </div>
+            <div className="grid gap-1">
+              <Label>Or target FBC amount</Label>
+              <Input value={buyAmountFbc} onChange={(e) => { setBuyAmountFbc(e.target.value); setQuote(null); }} placeholder="1.0" />
             </div>
           </div>
 
@@ -183,7 +194,10 @@ export function SwapToFBC(): JSX.Element {
 
           {quote && (
             <div className="text-xs text-muted-foreground">
-              Est. you pay ~{sellToken.id === 'ETH' ? formatUnits(BigInt(quote.sellAmount), sellToken.decimals) + ' ETH' : formatUnits(BigInt(quote.sellAmount), sellToken.decimals) + ' USDC'} for {formatUnits(BigInt(quote.buyAmount), 18)} FBC
+              {useSellAmount
+                ? <>Est. you receive ~{formatUnits(BigInt(quote.buyAmount), 18)} FBC for {formatUnits(BigInt(quote.sellAmount), sellToken.decimals)} {sellToken.id}</>
+                : <>Est. you pay ~{formatUnits(BigInt(quote.sellAmount), sellToken.decimals)} {sellToken.id} for {formatUnits(BigInt(quote.buyAmount), 18)} FBC</>
+              }
             </div>
           )}
 
