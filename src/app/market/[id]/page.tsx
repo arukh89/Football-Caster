@@ -13,7 +13,6 @@ import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 import { useWallet } from '@/hooks/useWallet';
 import { API_ENDPOINTS } from '@/lib/constants';
 import { payInFBC } from '@/lib/wallet-utils';
-import { formatFBC } from '@/lib/utils';
 import { ChevronLeft, ShoppingCart } from 'lucide-react';
 import { createWalletClient, http, createPublicClient } from 'viem';
 import { base } from 'viem/chains';

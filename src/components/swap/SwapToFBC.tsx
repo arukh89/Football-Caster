@@ -28,7 +28,8 @@ type TokenOption = {
 
 const TOKENS: TokenOption[] = [
   { id: 'ETH', label: 'ETH (Base)', decimals: 18 },
-  { id: 'USDC', label: 'USDC (Base)', address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6 },
+  // Native USDC (Base mainnet)
+  { id: 'USDC', label: 'USDC (Base)', address: '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0', decimals: 6 },
 ];
 
 type Quote = {
