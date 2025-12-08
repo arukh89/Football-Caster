@@ -2,22 +2,15 @@ import type { WalletClient, PublicClient } from 'viem';
 import { parseUnits, formatUnits } from 'viem';
 import { readContract, waitForTransactionReceipt, simulateContract } from 'viem/actions';
 import { base } from 'viem/chains';
-import { CONTRACT_ADDRESSES } from './constants';
+import { CONTRACT_ADDRESSES, TOKEN_ADDRESSES, USDC_ADDRESSES } from './constants';
 import { sendTx } from '@/lib/onchain/sendTx';
 const OX_QUOTE_URL = '/api/zeroex/quote';
-const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
+const WETH_BASE: `0x${string}` = TOKEN_ADDRESSES.weth;
 const UNISWAP_V3_QUOTER_V2: `0x${string}` = '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a';
 const UNISWAP_V3_SWAP_ROUTER_02: `0x${string}` = '0x2626664c2603336E57B271c5C0b26F421741e481';
 const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
-// USDC (official) with env-extensible list to avoid hardcoding unknowns
-const USDC_DEFAULTS: `0x${string}`[] = [
-  '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0',
-];
-const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
-const USDC_BASES: `0x${string}`[] = Array.from(new Set([...USDC_DEFAULTS, ...USDC_ENV]));
+// Centralized USDC list from constants
+const USDC_BASES: readonly `0x${string}`[] = USDC_ADDRESSES;
 
 // ERC20 ABI for approve and transfer functions
 const ERC20_ABI = [

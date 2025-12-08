@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWallet } from "@/hooks/useWallet";
-import { CONTRACT_ADDRESSES } from "@/lib/constants";
+import { CONTRACT_ADDRESSES, TOKEN_ADDRESSES } from "@/lib/constants";
 import { formatUnits, parseUnits, type WalletClient } from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 import { base } from "viem/chains";
@@ -28,7 +28,7 @@ type TokenOption = {
 
 const TOKENS: TokenOption[] = [
   { id: 'ETH', label: 'ETH (Base)', decimals: 18 },
-  { id: 'USDC', label: 'USDC (Base)', address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6 },
+  { id: 'USDC', label: 'USDC (Base)', address: TOKEN_ADDRESSES.usdc, decimals: 6 },
 ];
 
 type Quote = {

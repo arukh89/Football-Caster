@@ -14,6 +14,24 @@ export const CHAIN_CONFIG = {
   rpcUrl: process.env.NEXT_PUBLIC_BASE_RPC_URL || 'https://mainnet.base.org',
 } as const;
 
+// Canonical token addresses on Base mainnet
+export const TOKEN_ADDRESSES = {
+  // Native USDC on Base (Coinbase)
+  usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`,
+  // Canonical WETH on Base
+  weth: '0x4200000000000000000000000000000000000006' as `0x${string}`,
+} as const;
+
+// USDC addresses list (env-extendable; env takes precedence)
+export const USDC_ADDRESSES: readonly `0x${string}`[] = (() => {
+  const env = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
+  const uniq = new Set<string>([...env.map((x) => x.toLowerCase()), TOKEN_ADDRESSES.usdc.toLowerCase()]);
+  return Array.from(uniq).map((s) => ('0x' + s.replace(/^0x/, '')) as `0x${string}`);
+})();
+
 // Validate critical addresses at import time
 function validateTreasuryAddress(): `0x${string}` {
   let address = process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '';

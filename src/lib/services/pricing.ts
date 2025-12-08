@@ -4,7 +4,7 @@
  *   Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → GeckoTerminal → Uniswap v3 on-chain → Custom URL
  */
 
-import { CONTRACT_ADDRESSES, CHAIN_CONFIG } from '@/lib/constants';
+import { CONTRACT_ADDRESSES, CHAIN_CONFIG, TOKEN_ADDRESSES, USDC_ADDRESSES } from '@/lib/constants';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 
@@ -21,18 +21,9 @@ const ASSUME_ONE_USD: boolean = (
     .toLowerCase()
     .trim() !== 'false'
 );
-// USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
-const USDC_DEFAULTS: `0x${string}`[] = [
-  // Native USDC on Base (correct address)
-  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-];
-const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || '')
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
-// Prefer env-provided addresses first, then fall back to defaults
-const USDC_BASES: `0x${string}`[] = Array.from(new Set([...USDC_ENV, ...USDC_DEFAULTS]));
-const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
+// Centralized addresses
+const USDC_BASES: readonly `0x${string}`[] = USDC_ADDRESSES;
+const WETH_BASE: `0x${string}` = TOKEN_ADDRESSES.weth;
 // Uniswap V3 Factory on Base (per official deployments)
 const UNISWAP_V3_FACTORY: `0x${string}` = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
 const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
