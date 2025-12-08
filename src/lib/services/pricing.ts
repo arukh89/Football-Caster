@@ -22,13 +22,15 @@ const ASSUME_ONE_USD: boolean = (
 );
 // USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
 const USDC_DEFAULTS: `0x${string}`[] = [
-  '0x833589fcd6edb6e08f4c7c76f99918fcae4f2de0',
+  // Native USDC on Base (correct address)
+  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
 ];
 const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || '')
   .split(',')
   .map((s) => s.trim().toLowerCase())
   .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
-const USDC_BASES: `0x${string}`[] = Array.from(new Set([...USDC_DEFAULTS, ...USDC_ENV]));
+// Prefer env-provided addresses first, then fall back to defaults
+const USDC_BASES: `0x${string}`[] = Array.from(new Set([...USDC_ENV, ...USDC_DEFAULTS]));
 const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
 // Uniswap V3 Factory on Base (per official deployments)
 const UNISWAP_V3_FACTORY: `0x${string}` = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
