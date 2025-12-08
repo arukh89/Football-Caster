@@ -813,13 +813,19 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Prefer: Uniswap v4 TWAP → Uniswap v3 TWAP → 0x → Dexscreener → Uniswap v3 instantaneous → Custom
+  // Prefer: GeckoTerminal → Uniswap v4 TWAP → Uniswap v3 TWAP → 0x → Dexscreener → Custom
   let priceUsd: string | null = null;
   let source: 'dexscreener' | 'gecko' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' | 'override' = 'dexscreener';
 
+  // GeckoTerminal (try first - has actual FBC pool data)
+  priceUsd = await fetchFromGeckoTerminal();
+  if (priceUsd) source = 'gecko';
+
   // Uniswap v4 TWAP (if PoolId configured)
-  priceUsd = await fetchFromUniswapV4Twap();
-  if (priceUsd) source = 'uniswap_v4';
+  if (!priceUsd) {
+    priceUsd = await fetchFromUniswapV4Twap();
+    if (priceUsd) source = 'uniswap_v4';
+  }
 
   // Uniswap v3 TWAP (direct or multi-hop)
   if (!priceUsd) {
@@ -837,12 +843,6 @@ export async function getFBCPrice(): Promise<PriceData> {
   if (!priceUsd) {
     priceUsd = await fetchFromDexscreener();
     if (priceUsd) source = 'dexscreener';
-  }
-
-  // GeckoTerminal
-  if (!priceUsd) {
-    priceUsd = await fetchFromGeckoTerminal();
-    if (priceUsd) source = 'gecko';
   }
 
   // Uniswap v3 on-chain instantaneous (if TWAP unavailable)

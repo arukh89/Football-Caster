@@ -99,22 +99,30 @@ export function StarterPackCard(): JSX.Element | null {
   };
 
   const handlePayAndVerify = async (): Promise<void> => {
-    if (!quote || !account) return;
+    if (!quote) return;
     
     try {
       setProcessing(true);
       setError(null);
       
+      // Connect wallet if not connected
       if (!wallet.isConnected) {
-        await connect();
+        connect();
+        setError('Please connect your wallet to continue.');
+        setProcessing(false);
+        return;
+      }
+      
+      if (!account) {
+        setError('Wallet address not available. Please reconnect your wallet.');
+        setProcessing(false);
         return;
       }
 
-      // No bypass path
-
       // Use existing wallet client if available
       if (!walletClient) {
-        setError('Wallet client not available. Please connect your wallet.');
+        setError('Wallet client not available. Please ensure your wallet is properly connected.');
+        setProcessing(false);
         return;
       }
       

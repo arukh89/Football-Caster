@@ -20,7 +20,8 @@ function readEnv(): { URI: string; DB_NAME: string; FALLBACK_URI?: string; FALLB
   const DB_NAME = sanitize(env.NEXT_PUBLIC_SPACETIME_DB_NAME, 'footballcaster2');
   const FALLBACK_URI = sanitize(env.STDB_FALLBACK_URI, 'ws://127.0.0.1:3100');
   const FALLBACK_URIS = [FALLBACK_URI, 'ws://127.0.0.1:3000', 'ws://127.0.0.1:3001', 'ws://127.0.0.1:3002'];
-  const DEV_FALLBACK = (env.ENABLE_DEV_FALLBACK || '').toLowerCase() === 'true';
+  // Enable dev fallback by default in development
+  const DEV_FALLBACK = env.NODE_ENV !== 'production' || (env.ENABLE_DEV_FALLBACK || '').toLowerCase() === 'true';
   return { URI, DB_NAME, FALLBACK_URI, FALLBACK_URIS, DEV_FALLBACK };
 }
 

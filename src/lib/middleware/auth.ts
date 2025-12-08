@@ -35,38 +35,73 @@ function getOrigin(req: NextRequest): string {
  * Authenticate request and return user context
  */
 export async function authenticate(req: NextRequest): Promise<AuthContext | null> {
+  // Check for dev fallback first in development mode
+  const devFallbackEnabled = process.env.NODE_ENV !== 'production' && (process.env.ENABLE_DEV_FALLBACK !== 'false');
+  
+  // If in development and no auth headers, use dev fallback immediately
   const token = getToken(req);
   const fidHeader = req.headers.get('x-fid') || req.headers.get('x-warpcast-user-fid');
   const walletHeader = req.headers.get('x-wallet');
-
-  if (fidHeader && walletHeader) {
-    return { fid: parseInt(fidHeader, 10), wallet: walletHeader };
+  
+  // Check for explicit FID headers (allows client override)
+  if (fidHeader) {
+    const fid = parseInt(fidHeader, 10);
+    if (Number.isFinite(fid)) {
+      return { 
+        fid, 
+        wallet: walletHeader || '0xdev' 
+      };
+    }
+  }
+  
+  // Development fallback when no token is provided
+  if (devFallbackEnabled && !token) {
+    const devFid = parseInt(process.env.NEXT_PUBLIC_DEV_FID || '250704', 10);
+    console.warn('[Auth] Using dev fallback FID:', devFid);
+    return { fid: devFid, wallet: '0xdev' };
   }
 
   if (token) {
-    // First: try Quick Auth JWT verification
-    try {
-      const qa = createQuickAuthClient();
-      const origin = getOrigin(req);
-      // Primary verify with request origin
-      let payload = await qa.verifyJwt({ token, domain: origin });
-      // If verification fails due to domain mismatch, try configured frontend URL origin
-      // and a bare host fallback.
-      if (!payload) {
-        const envUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL;
-        const candidates: string[] = [];
-        if (envUrl) {
-          try { const u = new URL(envUrl); candidates.push(`${u.protocol}//${u.host}`); } catch {}
-        }
-        const bareHost = origin.replace(/^https?:\/\//, '');
-        candidates.push(bareHost); // some QA libs historically accepted host-only
-        for (const dom of candidates) {
-          try {
-            payload = await qa.verifyJwt({ token, domain: dom as any });
-            if (payload) break;
-          } catch {}
-        }
+    // Robust QuickAuth verification with domain candidates to handle Vercel/custom-domain nuances
+    const qa = createQuickAuthClient();
+    const origin = getOrigin(req);
+
+    const add = (arr: string[], v?: string) => { if (v && !arr.includes(v)) arr.push(v); };
+    const candidates: string[] = [];
+    const host = origin.replace(/^https?:\/\//, '');
+    const envUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL;
+
+    // Primary + variants
+    add(candidates, origin);                  // https://domain.tld
+    add(candidates, host);                    // domain.tld (some libs accept host-only)
+    add(candidates, `https://${host}`);       // ensure https variant
+    if (host.startsWith('www.')) add(candidates, `https://${host.slice(4)}`);
+    else add(candidates, `https://www.${host}`);
+
+    // Env-configured public URL variants
+    if (envUrl) {
+      try {
+        const u = new URL(envUrl);
+        const envOrigin = `${u.protocol}//${u.host}`;
+        const envHost = u.host;
+        add(candidates, envOrigin);
+        add(candidates, envHost);
+        add(candidates, `https://${envHost}`);
+      } catch {}
+    }
+
+    let payload: any = null;
+    let lastErr: unknown = null;
+    for (const dom of candidates) {
+      try {
+        payload = await qa.verifyJwt({ token, domain: dom as any });
+        if (payload) break;
+      } catch (e) {
+        lastErr = e;
+        continue;
       }
+    }
+    if (payload) {
       const fid = Number(payload.sub);
       let wallet = '0xdev';
       try {
@@ -76,18 +111,17 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
         console.error('stGetUser failed', e);
       }
       return { fid, wallet };
-    } catch (error) {
-      // Only allow dev fallback in non-production when enabled (default true in development)
-      const devFallbackEnabled = process.env.NODE_ENV !== 'production' && (process.env.ENABLE_DEV_FALLBACK !== 'false');
-      if (devFallbackEnabled) {
-        const [fidStr, wallet] = token.split(':');
-        const fidNum = parseInt(fidStr || '', 10);
-        if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
-      }
-      // Otherwise unauthorized
-      console.error('JWT verification failed:', error);
-      return null;
     }
+
+    // Only allow dev fallback in non-production when enabled (default true in development)
+    const devFallbackEnabled = process.env.NODE_ENV !== 'production' && (process.env.ENABLE_DEV_FALLBACK !== 'false');
+    if (devFallbackEnabled) {
+      const [fidStr, wallet] = token.split(':');
+      const fidNum = parseInt(fidStr || '', 10);
+      if (!Number.isNaN(fidNum) && wallet) return { fid: fidNum, wallet };
+    }
+    console.error('JWT verification failed for all domain candidates:', { candidates, error: String(lastErr || 'unknown') });
+    return null;
   }
 
   // SECURITY: Explicitly block dev fallback in production

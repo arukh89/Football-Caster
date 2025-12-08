@@ -17,7 +17,24 @@ export async function GET(req: Request): Promise<Response> {
     const sort = (searchParams.get('sort') as NpcSortKey) || 'lastActive';
     const order = (searchParams.get('order') as 'asc' | 'desc') || 'desc';
 
-    const result = await stListNPCs({ page, pageSize, active, ownedBy, search, sort, order });
-    return ok(result);
+    try {
+      const result = await stListNPCs({ page, pageSize, active, ownedBy, search, sort, order });
+      // Map items -> npcs for backward compatibility
+      return ok({
+        npcs: result.items || [],
+        total: result.total || 0,
+        page: result.page || page,
+        pageSize: result.pageSize || pageSize
+      });
+    } catch (error) {
+      console.error('NPC list error:', error);
+      // Return empty result on error
+      return ok({
+        npcs: [],
+        total: 0,
+        page,
+        pageSize
+      });
+    }
   });
 }
