@@ -1,7 +1,7 @@
 /**
  * Pricing Service - FBC/USD price fetching
  * Sources priority:
- *   Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → Uniswap v3 on-chain → Custom URL → Clanker
+ *   Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → GeckoTerminal → Uniswap v3 on-chain → Custom URL
  */
 
 import { CONTRACT_ADDRESSES, CHAIN_CONFIG } from '@/lib/constants';
@@ -10,6 +10,7 @@ import { base } from 'viem/chains';
 
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || '';
+const GECKO_POOL_ID_RAW = (process.env.NEXT_PUBLIC_GECKO_POOL_ID || '').trim();
 const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
 // Optional manual override for local/dev: set any of these envs to a positive number
 const PRICE_OVERRIDE_ENV = process.env.NEXT_PUBLIC_FBC_PRICE_USD;
@@ -48,7 +49,7 @@ const UNISWAP_V4_FBC_WETH_POOL_ID: `0x${string}` | null = (() => {
 
 interface PriceData {
   priceUsd: string;
-  source: 'dexscreener' | 'custom' | '0x' | 'override' | 'uniswap_v3' | 'uniswap_v4';
+  source: 'dexscreener' | 'gecko' | 'custom' | '0x' | 'override' | 'uniswap_v3' | 'uniswap_v4';
   timestamp: number;
 }
 
@@ -674,6 +675,102 @@ async function fetchFromDexscreener(): Promise<string | null> {
 }
 
 /**
+ * Fetch FBC price from GeckoTerminal (fallback)
+ * Supports either full pool id (e.g., base_uniswap_v4_0x...) or raw 0x... (bytes32) with implicit v4 prefix.
+ */
+async function fetchFromGeckoTerminal(): Promise<string | null> {
+  try {
+    if (!GECKO_POOL_ID_RAW) return null;
+    const fbcAddr = CONTRACT_ADDRESSES.fbc.toLowerCase();
+
+    // Normalize id
+    const looksLikeBytes32 = /^0x[a-f0-9]{64}$/i.test(GECKO_POOL_ID_RAW);
+    const candidates: string[] = [];
+    if (looksLikeBytes32) {
+      candidates.push(`base_uniswap_v4_${GECKO_POOL_ID_RAW}`);
+      candidates.push(`base_uniswap_v3_${GECKO_POOL_ID_RAW}`);
+    } else {
+      candidates.push(GECKO_POOL_ID_RAW);
+    }
+
+    let lastErr: any = null;
+    for (const id of candidates) {
+      try {
+        const url = `https://api.geckoterminal.com/api/v2/pools/${id}`;
+        const res = await fetch(url, {
+          headers: {
+            'accept': 'application/json',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
+        if (!res.ok) continue;
+        const data: any = await res.json().catch(() => null);
+        const attrs = data?.data?.attributes;
+        const rel = data?.data?.relationships;
+        const included: any[] = Array.isArray(data?.included) ? data.included : [];
+
+        // Resolve base/quote token addresses from relationships → included
+        const baseTokenId = rel?.base_token?.data?.id;
+        const quoteTokenId = rel?.quote_token?.data?.id;
+        const findAddr = (tid: string | undefined) => {
+          if (!tid) return null;
+          const tok = included.find((x) => x?.type === 'tokens' && x?.id === tid);
+          const addr = tok?.attributes?.address || tok?.attributes?.address_hex;
+          return typeof addr === 'string' ? String(addr).toLowerCase() : null;
+        };
+        const baseAddr = findAddr(baseTokenId);
+        const quoteAddr = findAddr(quoteTokenId);
+
+        // Prefer direct USD price if the USD price for FBC side is provided
+        const pickNumeric = (v: any): number | null => {
+          const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v.replace(/[^0-9.\-eE]/g, '')) : NaN;
+          return isFinite(n) && n > 0 ? n : null;
+        };
+
+        if (baseAddr && baseAddr === fbcAddr) {
+          const usd = pickNumeric(attrs?.base_token_price_usd);
+          if (usd) return String(usd);
+        }
+        if (quoteAddr && quoteAddr === fbcAddr) {
+          const usd = pickNumeric(attrs?.quote_token_price_usd);
+          if (usd) return String(usd);
+        }
+
+        // If direct USD price missing, try compute via WETH leg when other token is WETH
+        const isBaseWeth = baseAddr === WETH_BASE.toLowerCase();
+        const isQuoteWeth = quoteAddr === WETH_BASE.toLowerCase();
+        if ((isBaseWeth || isQuoteWeth) && (baseAddr === fbcAddr || quoteAddr === fbcAddr)) {
+          const usdPerWeth = await usdPerWethFromV3Twap();
+          const nUsdPerWeth = pickNumeric(usdPerWeth);
+          if (!nUsdPerWeth) continue;
+          // Need WETH per FBC
+          let wethPerFbc: number | null = null;
+          if (baseAddr === fbcAddr) {
+            // base=FBC, quote=WETH → attrs.quote_token_price_base_token = WETH per FBC
+            wethPerFbc = pickNumeric(attrs?.quote_token_price_base_token);
+          } else if (quoteAddr === fbcAddr) {
+            // base=WETH, quote=FBC → attrs.base_token_price_quote_token = WETH per FBC
+            wethPerFbc = pickNumeric(attrs?.base_token_price_quote_token);
+          }
+          if (wethPerFbc && wethPerFbc > 0) {
+            const usdPerFbc = nUsdPerWeth * wethPerFbc;
+            if (isFinite(usdPerFbc) && usdPerFbc > 0) return String(usdPerFbc);
+          }
+        }
+      } catch (e) {
+        lastErr = e;
+        continue;
+      }
+    }
+    if (lastErr) console.error('GeckoTerminal error (last):', lastErr);
+    return null;
+  } catch (error) {
+    console.error('GeckoTerminal fetch error:', error);
+    return null;
+  }
+}
+
+/**
  * Fetch FBC price from a custom endpoint if provided via env (NEXT_PUBLIC_PRICE_URL or PRICE_URL)
  * Accepts JSON payloads like { priceUsd: "0.123" } or { price_usd: 0.123 }.
  * Falls back to scanning text for a numeric USD value when JSON isn't available.
@@ -742,7 +839,7 @@ export async function getFBCPrice(): Promise<PriceData> {
 
   // Prefer: Uniswap v4 TWAP → Uniswap v3 TWAP → 0x → Dexscreener → Uniswap v3 instantaneous → Custom
   let priceUsd: string | null = null;
-  let source: 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' | 'override' = 'dexscreener';
+  let source: 'dexscreener' | 'gecko' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' | 'override' = 'dexscreener';
 
   // Uniswap v4 TWAP (if PoolId configured)
   priceUsd = await fetchFromUniswapV4Twap();
@@ -764,6 +861,12 @@ export async function getFBCPrice(): Promise<PriceData> {
   if (!priceUsd) {
     priceUsd = await fetchFromDexscreener();
     if (priceUsd) source = 'dexscreener';
+  }
+
+  // GeckoTerminal
+  if (!priceUsd) {
+    priceUsd = await fetchFromGeckoTerminal();
+    if (priceUsd) source = 'gecko';
   }
 
   // Uniswap v3 on-chain instantaneous (if TWAP unavailable)
