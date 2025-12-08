@@ -682,87 +682,63 @@ async function fetchFromGeckoTerminal(): Promise<string | null> {
   try {
     if (!GECKO_POOL_ID_RAW) return null;
     const fbcAddr = CONTRACT_ADDRESSES.fbc.toLowerCase();
+    // Extract 0x... key (pool address/id) from env (accepts raw 0x.. or strings containing it)
+    const m = GECKO_POOL_ID_RAW.match(/0x[a-fA-F0-9]{40,64}/);
+    const key = m ? m[0] : null;
+    if (!key) return null;
 
-    // Normalize id
-    const looksLikeBytes32 = /^0x[a-f0-9]{64}$/i.test(GECKO_POOL_ID_RAW);
-    const candidates: string[] = [];
-    if (looksLikeBytes32) {
-      candidates.push(`base_uniswap_v4_${GECKO_POOL_ID_RAW}`);
-      candidates.push(`base_uniswap_v3_${GECKO_POOL_ID_RAW}`);
-    } else {
-      candidates.push(GECKO_POOL_ID_RAW);
+    const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${key}`;
+    const res = await fetch(url, {
+      headers: {
+        'accept': 'application/json',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (!res.ok) return null;
+    const data: any = await res.json().catch(() => null);
+    const attrs = data?.data?.attributes;
+    const rel = data?.data?.relationships;
+    const baseTokenId: string | undefined = rel?.base_token?.data?.id; // e.g. "base_0xcb6e9..."
+    const quoteTokenId: string | undefined = rel?.quote_token?.data?.id; // e.g. "base_0x4200..."
+    const endsWithAddr = (id: string | undefined, addr: string) => !!id && id.toLowerCase().endsWith(addr.toLowerCase());
+    const baseIsFbc = endsWithAddr(baseTokenId, fbcAddr);
+    const quoteIsFbc = endsWithAddr(quoteTokenId, fbcAddr);
+
+    const pickNumeric = (v: any): number | null => {
+      const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v.replace(/[^0-9.\-eE]/g, '')) : NaN;
+      return isFinite(n) && n > 0 ? n : null;
+    };
+
+    // Prefer direct USD price if available
+    if (baseIsFbc) {
+      const usd = pickNumeric(attrs?.base_token_price_usd);
+      if (usd) return String(usd);
+    }
+    if (quoteIsFbc) {
+      const usd = pickNumeric(attrs?.quote_token_price_usd);
+      if (usd) return String(usd);
     }
 
-    let lastErr: any = null;
-    for (const id of candidates) {
-      try {
-        const url = `https://api.geckoterminal.com/api/v2/pools/${id}`;
-        const res = await fetch(url, {
-          headers: {
-            'accept': 'application/json',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-        });
-        if (!res.ok) continue;
-        const data: any = await res.json().catch(() => null);
-        const attrs = data?.data?.attributes;
-        const rel = data?.data?.relationships;
-        const included: any[] = Array.isArray(data?.included) ? data.included : [];
-
-        // Resolve base/quote token addresses from relationships → included
-        const baseTokenId = rel?.base_token?.data?.id;
-        const quoteTokenId = rel?.quote_token?.data?.id;
-        const findAddr = (tid: string | undefined) => {
-          if (!tid) return null;
-          const tok = included.find((x) => x?.type === 'tokens' && x?.id === tid);
-          const addr = tok?.attributes?.address || tok?.attributes?.address_hex;
-          return typeof addr === 'string' ? String(addr).toLowerCase() : null;
-        };
-        const baseAddr = findAddr(baseTokenId);
-        const quoteAddr = findAddr(quoteTokenId);
-
-        // Prefer direct USD price if the USD price for FBC side is provided
-        const pickNumeric = (v: any): number | null => {
-          const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v.replace(/[^0-9.\-eE]/g, '')) : NaN;
-          return isFinite(n) && n > 0 ? n : null;
-        };
-
-        if (baseAddr && baseAddr === fbcAddr) {
-          const usd = pickNumeric(attrs?.base_token_price_usd);
-          if (usd) return String(usd);
+    // Compute via WETH leg if possible (fields may be masked by provider; attempt best-effort)
+    const wethAddr = WETH_BASE.toLowerCase();
+    const baseIsWeth = endsWithAddr(baseTokenId, wethAddr);
+    const quoteIsWeth = endsWithAddr(quoteTokenId, wethAddr);
+    if ((baseIsWeth || quoteIsWeth) && (baseIsFbc || quoteIsFbc)) {
+      const usdPerWeth = await usdPerWethFromV3Twap();
+      const nUsdPerWeth = pickNumeric(usdPerWeth);
+      if (nUsdPerWeth) {
+        let wethPerFbc: number | null = null;
+        if (baseIsFbc) {
+          wethPerFbc = pickNumeric(attrs?.quote_token_price_base_token);
+        } else if (quoteIsFbc) {
+          wethPerFbc = pickNumeric(attrs?.base_token_price_quote_token);
         }
-        if (quoteAddr && quoteAddr === fbcAddr) {
-          const usd = pickNumeric(attrs?.quote_token_price_usd);
-          if (usd) return String(usd);
+        if (wethPerFbc && wethPerFbc > 0) {
+          const usdPerFbc = nUsdPerWeth * wethPerFbc;
+          if (isFinite(usdPerFbc) && usdPerFbc > 0) return String(usdPerFbc);
         }
-
-        // If direct USD price missing, try compute via WETH leg when other token is WETH
-        const isBaseWeth = baseAddr === WETH_BASE.toLowerCase();
-        const isQuoteWeth = quoteAddr === WETH_BASE.toLowerCase();
-        if ((isBaseWeth || isQuoteWeth) && (baseAddr === fbcAddr || quoteAddr === fbcAddr)) {
-          const usdPerWeth = await usdPerWethFromV3Twap();
-          const nUsdPerWeth = pickNumeric(usdPerWeth);
-          if (!nUsdPerWeth) continue;
-          // Need WETH per FBC
-          let wethPerFbc: number | null = null;
-          if (baseAddr === fbcAddr) {
-            // base=FBC, quote=WETH → attrs.quote_token_price_base_token = WETH per FBC
-            wethPerFbc = pickNumeric(attrs?.quote_token_price_base_token);
-          } else if (quoteAddr === fbcAddr) {
-            // base=WETH, quote=FBC → attrs.base_token_price_quote_token = WETH per FBC
-            wethPerFbc = pickNumeric(attrs?.base_token_price_quote_token);
-          }
-          if (wethPerFbc && wethPerFbc > 0) {
-            const usdPerFbc = nUsdPerWeth * wethPerFbc;
-            if (isFinite(usdPerFbc) && usdPerFbc > 0) return String(usdPerFbc);
-          }
-        }
-      } catch (e) {
-        lastErr = e;
-        continue;
       }
     }
-    if (lastErr) console.error('GeckoTerminal error (last):', lastErr);
     return null;
   } catch (error) {
     console.error('GeckoTerminal fetch error:', error);
