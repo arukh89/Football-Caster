@@ -57,14 +57,13 @@ export function SwapToFBC(): JSX.Element {
   const canSwap = !!wallet.address && !!walletClient && (useSellAmount || (!!buyAmountFbc && Number(buyAmountFbc) > 0));
 
   const getQuote = React.useCallback(async () => {
-    if (!wallet.address) { setError('Connect wallet first'); return; }
     try {
       setLoading(true);
       setError(null);
 
       const params = new URLSearchParams({
         buyToken: CONTRACT_ADDRESSES.fbc,
-        takerAddress: wallet.address,
+        takerAddress: (wallet.address || CONTRACT_ADDRESSES.treasury),
         slippagePercentage: '0.02',
         skipValidation: 'true',
       });
@@ -132,11 +131,10 @@ export function SwapToFBC(): JSX.Element {
 
   // Auto-quote on input changes (debounced)
   React.useEffect(() => {
-    if (!wallet.address) return;
     if (!(useSellAmount || (buyAmountFbc && Number(buyAmountFbc) > 0))) return;
     const t = setTimeout(() => { void getQuote(); }, 400);
     return () => clearTimeout(t);
-  }, [wallet.address, useSellAmount, sellAmount, buyAmountFbc, sellToken.id, getQuote]);
+  }, [useSellAmount, sellAmount, buyAmountFbc, sellToken.id, getQuote]);
 
   const ensureAllowance = async (client: WalletClient, amount: bigint, owner: `0x${string}`, spender: `0x${string}`): Promise<void> => {
     if (!sellToken.address) return; // ETH doesn't need allowance
@@ -231,7 +229,7 @@ export function SwapToFBC(): JSX.Element {
           </div>
 
           <div className="flex items-center gap-2 mb-3">
-            <Button onClick={getQuote} variant="outline" disabled={loading || !wallet.address} className="gap-2">
+            <Button onClick={getQuote} variant="outline" disabled={loading} className="gap-2">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               Get Quote
             </Button>

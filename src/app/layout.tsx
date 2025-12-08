@@ -36,6 +36,12 @@ export default function RootLayout({
           );
 }
 
+const PUBLIC_URL = (() => {
+  const raw = (process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://footballcasternew.vercel.app/').trim();
+  const u = raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  return u;
+})();
+
 export const metadata: Metadata = {
   title: "Football Caster Auction App",
   description:
@@ -44,14 +50,14 @@ export const metadata: Metadata = {
     "fc:miniapp:manifest": "/.well-known/farcaster.json",
     "fc:miniapp": JSON.stringify({
       version: "1",
-      imageUrl: "https://football-caster-new.vercel.app/icon.png",
+      imageUrl: `${PUBLIC_URL}/icon.png`,
       button: {
         title: "Open App",
         action: {
           type: "launch_frame",
           name: "Football Caster",
-          url: "https://football-caster-new.vercel.app/",
-          splashImageUrl: "https://football-caster-new.vercel.app/splash.png",
+          url: `${PUBLIC_URL}/`,
+          splashImageUrl: `${PUBLIC_URL}/splash.png`,
           splashBackgroundColor: "#ffffff",
         },
       },

@@ -40,8 +40,7 @@ export function StarterPackCard(): JSX.Element | null {
   const { wallet, walletClient, publicClient: walletPublicClient, connect, switchToBase, isCorrectChain } = useWallet();
   const account = wallet.address;
   const { identity } = useFarcasterIdentity();
-  const isDev = identity?.fid === DEV_FID;
-  const isAdminWallet = (account || '').toLowerCase() === CONTRACT_ADDRESSES.treasury.toLowerCase();
+  // Admin/dev free-claim bypass removed: all users must pay with FBC
 
   const refreshStatus = React.useCallback(async () => {
     try {
@@ -111,41 +110,7 @@ export function StarterPackCard(): JSX.Element | null {
         return;
       }
 
-      // Admin/Dev bypass: skip payment and directly verify
-      if (isDev || isAdminWallet) {
-        setStep('verifying');
-        // Use admin grant endpoint instead of fake tx
-        let fid = identity?.fid;
-        if (!fid) {
-          // fetch from auth if identity not ready
-          const meRes = await authFetch('/api/auth/me');
-          if (meRes.ok) {
-            const payload = await meRes.json();
-            const me = payload?.data ?? payload;
-            fid = Number(me?.fid);
-          }
-        }
-        if (!fid) throw new Error('Unable to determine your FID');
-        // Gasless admin verification via signature (no gas cost)
-        let signature: `0x${string}` | undefined;
-        let message: string | undefined;
-        if (isAdminWallet && walletClient) {
-          message = `fc-admin-grant:fid=${fid}`;
-          signature = await (walletClient as any).signMessage({ account, message });
-        }
-        const res = await authFetch("/api/admin/starter/grant", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fid, wallet: account, signature, message }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data?.error || "Admin grant failed");
-        }
-        setStep('complete');
-        await refreshStatus();
-        return;
-      }
+      // No bypass path
 
       // Use existing wallet client if available
       if (!walletClient) {
