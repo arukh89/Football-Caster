@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 // Scoring is centralized in lib/neynar/score
 
 export async function GET(): Promise<Response> {
-  const key = process.env.NEYNAR_API_KEY || process.env.FARCASTER_API_KEY;
+  const key = process.env.NEYNAR_API_KEY;
   const DEV_FID = Number(process.env.NEXT_PUBLIC_DEV_FID || '250704');
   if (!key) return badRequest('missing NEYNAR_API_KEY');
 

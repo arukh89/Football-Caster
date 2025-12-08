@@ -69,7 +69,7 @@ export async function authenticate(req: NextRequest): Promise<AuthContext | null
     const add = (arr: string[], v?: string) => { if (v && !arr.includes(v)) arr.push(v); };
     const candidates: string[] = [];
     const host = origin.replace(/^https?:\/\//, '');
-    const envUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL;
+    const envUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
 
     // Primary + variants
     add(candidates, origin);                  // https://domain.tld

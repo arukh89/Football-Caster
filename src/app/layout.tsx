@@ -37,7 +37,7 @@ export default function RootLayout({
 }
 
 const PUBLIC_URL = (() => {
-  const raw = (process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://footballcasternew.vercel.app/').trim();
+  const raw = (process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://footballcasternew.vercel.app/').trim();
   const u = raw.endsWith('/') ? raw.slice(0, -1) : raw;
   return u;
 })();
