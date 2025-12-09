@@ -1,12 +1,12 @@
 export function OpenInWarpcastCTA(): JSX.Element {
   return (
     <a
-      href="https://footballcasternew.vercel.app/"
+      href="https://warpcast.com/"
       target="_blank"
       rel="noreferrer"
       className="btn btn-primary"
     >
-      Buka Aplikasi Web
+      Open in Warpcast
     </a>
   );
 }

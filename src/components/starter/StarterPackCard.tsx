@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Gift, ArrowRight, Loader2, CheckCircle } from "lucide-react";
 import { GlassCard } from "@/components/glass/GlassCard";
+import { OpenInWarpcastCTA } from "@/components/OpenInWarpcastCTA";
 import { Button } from "@/components/ui/button";
 import { quickAuth } from "@farcaster/miniapp-sdk";
 import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
@@ -33,6 +34,7 @@ export function StarterPackCard(): JSX.Element | null {
   const [loading, setLoading] = React.useState(true);
   const [processing, setProcessing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [unauthorized, setUnauthorized] = React.useState<boolean>(false);
   const [hasClaimed, setHasClaimed] = React.useState<boolean | null>(null);
   const [quote, setQuote] = React.useState<QuoteResponse | null>(null);
   const [step, setStep] = React.useState<'idle' | 'quote' | 'payment' | 'verifying' | 'complete'>('idle');
@@ -54,6 +56,11 @@ export function StarterPackCard(): JSX.Element | null {
         headers['x-fid'] = String(DEV_FID);
       }
       const res = await authFetch("/api/starter/status", { cache: "no-store", headers });
+      if (res.status === 401) {
+        setUnauthorized(true);
+        setHasClaimed(null);
+        return;
+      }
       if (!res.ok) throw new Error(String(res.status));
       const payload = await res.json();
       const data = (payload?.data ?? payload) as { hasClaimed: boolean };
@@ -148,6 +155,10 @@ export function StarterPackCard(): JSX.Element | null {
         body: JSON.stringify({ txHash: hash }),
       });
       
+      if (res.status === 401) {
+        setUnauthorized(true);
+        throw new Error('Please open in Warpcast to continue');
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || "Verification failed");
@@ -188,7 +199,14 @@ export function StarterPackCard(): JSX.Element | null {
             }
           </p>
           
-          {error && <div className="text-sm text-red-500 mb-2">{error}</div>}
+          {unauthorized ? (
+            <div className="mb-3">
+              <div className="text-sm text-amber-600 mb-2">This action requires Warpcast Mini App.</div>
+              <OpenInWarpcastCTA />
+            </div>
+          ) : (
+            error && <div className="text-sm text-red-500 mb-2">{error}</div>
+          )}
           
           {quote && step === 'payment' && (
             <div className="mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded">
