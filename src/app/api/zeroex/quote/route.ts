@@ -33,15 +33,16 @@ export async function GET(req: NextRequest): Promise<Response> {
     }
 
     try {
+      const apiKey = process.env.ZERO_EX_API_KEY || process.env.ZEROEX_API_KEY || '';
       const res = await fetch(upstream.toString(), {
         headers: {
           accept: 'application/json',
-          '0x-api-key': process.env.ZEROEX_API_KEY || '', // Optional API key if you have one
+          '0x-api-key': apiKey,
+          '0x-version': 'v2',
           'user-agent': 'FootballCaster/1.0 (+server-proxy)'
         },
         cache: 'no-store',
       });
-
       const bodyText = await res.text();
       
       // Handle 404 - token not found
