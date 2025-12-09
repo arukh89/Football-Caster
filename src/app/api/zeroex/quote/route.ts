@@ -5,6 +5,7 @@
 
 import type { NextRequest } from 'next/server';
 import { ok, withErrorHandling, jsonError } from '@/lib/api/http';
+import { CHAIN_CONFIG } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,19 +25,34 @@ export async function GET(req: NextRequest): Promise<Response> {
       return jsonError('Missing buyToken or sellToken parameter', 400);
     }
 
-    // Build upstream URL
-    const upstream = new URL('https://base.api.0x.org/swap/v1/quote');
-    
-    // Forward all query params
+    // Build upstream URL (0x v2 Allowance Holder Quote)
+    const upstream = new URL('https://api.0x.org/swap/allowance-holder/quote');
+
+    // Map legacy v1 params → v2
+    const tmp = new URLSearchParams();
     for (const [k, v] of sp.entries()) {
-      upstream.searchParams.append(k, v);
+      if (k === 'takerAddress') { tmp.set('taker', v); continue; }
+      if (k === 'slippagePercentage') {
+        const num = Number(v);
+        if (isFinite(num) && num >= 0) {
+          const bps = Math.round(num * 10000);
+          tmp.set('slippageBps', String(bps));
+        }
+        continue;
+      }
+      if (k === 'skipValidation') { continue; } // drop unsupported
+      tmp.append(k, v);
     }
+    // Ensure chainId present (default Base)
+    if (!tmp.has('chainId')) tmp.set('chainId', String(CHAIN_CONFIG.chainId || 8453));
+    for (const [k, v] of tmp.entries()) upstream.searchParams.append(k, v);
 
     try {
       const res = await fetch(upstream.toString(), {
         headers: {
           accept: 'application/json',
-          '0x-api-key': process.env.ZEROEX_API_KEY || '', // Optional API key if you have one
+          '0x-api-key': process.env.ZEROEX_API_KEY || '',
+          '0x-version': 'v2',
           'user-agent': 'FootballCaster/1.0 (+server-proxy)'
         },
         cache: 'no-store',

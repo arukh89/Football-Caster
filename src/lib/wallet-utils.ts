@@ -181,7 +181,7 @@ export async function payInFBC(
       // Attempt auto-swap from ETH → FBC for the missing amount via 0x on Base
       const missing = amountBigInt - balance;
       try {
-        const url = `${OX_QUOTE_URL}?sellToken=ETH&buyToken=${CONTRACT_ADDRESSES.fbc}&buyAmount=${missing}&takerAddress=${account}&slippagePercentage=0.02&includedSources=Uniswap_V3&skipValidation=true`;
+        const url = `${OX_QUOTE_URL}?chainId=8453&sellToken=ETH&buyToken=${CONTRACT_ADDRESSES.fbc}&buyAmount=${missing}&taker=${account}&slippageBps=200&includedSources=Uniswap_V3`;
         const res = await fetch(url, { headers: { accept: 'application/json' } });
         if (!res.ok) throw new Error(`0x quote failed (${res.status})`);
         const payload = await res.json();

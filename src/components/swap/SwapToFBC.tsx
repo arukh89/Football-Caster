@@ -63,9 +63,9 @@ export function SwapToFBC(): JSX.Element {
 
       const params = new URLSearchParams({
         buyToken: CONTRACT_ADDRESSES.fbc,
-        takerAddress: (wallet.address || CONTRACT_ADDRESSES.treasury),
-        slippagePercentage: '0.02',
-        skipValidation: 'true',
+        taker: (wallet.address || CONTRACT_ADDRESSES.treasury),
+        slippageBps: '200', // 2%
+        chainId: '8453',
       });
       if (useSellAmount) {
         const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString();
@@ -98,7 +98,7 @@ export function SwapToFBC(): JSX.Element {
           } else {
             // get USDC→ETH price for 1 USD to derive USD/ETH (use USDC address, not symbol)
             const usdcAddr = TOKENS.find(t => t.id === 'USDC')!.address!;
-            const p = new URLSearchParams({ sellToken: usdcAddr, buyToken: 'ETH', sellAmount: '1000000' });
+            const p = new URLSearchParams({ sellToken: usdcAddr, buyToken: 'ETH', sellAmount: '1000000', chainId: '8453', taker: (wallet.address || CONTRACT_ADDRESSES.treasury) });
             const r = await fetch(`/api/zeroex/quote?${p.toString()}`, { cache: 'no-store' });
             if (r.ok) {
               const pp = await r.json();

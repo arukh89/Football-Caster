@@ -12,7 +12,8 @@ import { base } from 'viem/chains';
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || '';
 const GECKO_POOL_ID_RAW = (process.env.NEXT_PUBLIC_GECKO_POOL_ID || '').trim();
-const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
+// 0x Swap API v2 price endpoint (Allowance Holder)
+const OX_PRICE_URL_V2 = 'https://api.0x.org/swap/allowance-holder/price';
 // Optional manual override for local/dev: set any of these envs to a positive number
 const PRICE_OVERRIDE_ENV = process.env.NEXT_PUBLIC_FBC_PRICE_USD;
 // Dev convenience: in non-production, assume 1 FBC = $1 unless explicitly disabled
@@ -612,12 +613,20 @@ async function fetchFrom0x(): Promise<string | null> {
     const fbc = CONTRACT_ADDRESSES.fbc;
     // Try both USDC variants; take the first successful response
     for (const usdc of USDC_BASES) {
-      // Ask for price buying FBC with exactly 1 USDC (6 decimals)
-      const url = `${OX_PRICE_URL}?sellToken=${usdc}&buyToken=${fbc}&sellAmount=1000000`;
+      // Ask for price buying FBC with exactly 1 USDC (6 decimals) on Base (chainId=8453)
+      const sp = new URLSearchParams({
+        chainId: String(CHAIN_CONFIG.chainId || 8453),
+        sellToken: usdc,
+        buyToken: fbc,
+        sellAmount: '1000000', // 1 USDC (6 decimals)
+      });
+      const url = `${OX_PRICE_URL_V2}?${sp.toString()}`;
       const res = await fetch(url, {
         headers: {
-          'accept': 'application/json',
-          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          accept: 'application/json',
+          '0x-api-key': process.env.ZEROEX_API_KEY || '',
+          '0x-version': 'v2',
+          'user-agent': 'FootballCaster/1.0 (+server-pricing)'
         },
       });
       if (!res.ok) continue;
