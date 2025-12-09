@@ -1,18 +1,13 @@
-/**
- * POST /api/starter/quote
- * Get quote for starter pack ($1 in FBC)
- */
-
-import { ok, withErrorHandling } from '@/lib/api/http';
-import { getQuote } from '@/lib/services/pricing';
-
+// Deprecated endpoint: moved to /api/pricing/quote
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(): Promise<Response> {
-  return withErrorHandling(async () => {
-    const starterPriceUSD = process.env.NEXT_PUBLIC_STARTER_PACK_PRICE_USD || '1';
-    const quote = await getQuote(starterPriceUSD);
-    return ok({ amountWei: quote.amountWei, priceUsd: quote.priceUsd, usdAmount: starterPriceUSD });
+  const starterPriceUSD = process.env.NEXT_PUBLIC_STARTER_PACK_PRICE_USD || '1';
+  return fetch(new URL('/api/pricing/quote', process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usd: starterPriceUSD }),
+    cache: 'no-store',
   });
 }

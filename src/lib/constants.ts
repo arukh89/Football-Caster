@@ -79,7 +79,6 @@ export const FORMATIONS = [
 
 export const API_ENDPOINTS = {
   starter: {
-    quote: '/api/starter/quote',
     verify: '/api/starter/verify',
     status: '/api/starter/status',
   },

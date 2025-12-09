@@ -21,6 +21,7 @@ interface QuoteResponse {
 }
 
 export function StarterPackCard(): JSX.Element | null {
+  const STARTER_PRICE_USD = process.env.NEXT_PUBLIC_STARTER_PACK_PRICE_USD || '1';
   const isInFarcaster = useIsInFarcaster();
   const authFetch = React.useCallback(
     (input: RequestInfo | URL, init?: RequestInit) => {
@@ -82,10 +83,11 @@ export function StarterPackCard(): JSX.Element | null {
       setError(null);
       setStep('quote');
       
-      // Quote does not require auth
-      const res = await fetch("/api/starter/quote", { 
+      // Quote does not require auth; use canonical pricing endpoint
+      const res = await fetch("/api/pricing/quote", { 
         method: "POST",
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usd: STARTER_PRICE_USD })
       });
       
       if (!res.ok) {
@@ -95,7 +97,7 @@ export function StarterPackCard(): JSX.Element | null {
       
       const payload = await res.json();
       const quoteData = (payload?.data ?? payload) as QuoteResponse;
-      setQuote(quoteData);
+      setQuote({ ...quoteData, usdAmount: STARTER_PRICE_USD });
       setStep('payment');
     } catch (e) {
       setError((e as Error).message);
